@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DDoS-Ниндзя | Robot Slayer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="ddos-logo">
+        <img src="https://ddos-guard.net/static/img/logo.svg" alt="DDoS-Guard" onerror="this.src='https://via.placeholder.com/120x40/6b4eff/white?text=DDoS-Guard'">
+    </div>
+    
+    <div class="cyber-bg">
+        <div class="hex-grid"></div>
+        <canvas id="cyberCanvas" class="cyber-canvas"></canvas>
+    </div>
+    
+    <div id="app">
+        <div v-if="registered && !gameActive && !gameEnded && !showAdminPanel && !showTournament" class="account-header">
+            <div class="account-info" @click="showAccountModal = true">
+                <div class="avatar">R</div>
+                <div class="account-details">
+                    <span class="account-name">{{ user.firstName }} {{ user.lastName }}</span>
+                    <span class="account-status">Активен</span>
+                </div>
+                <div class="account-arrow">▼</div>
+            </div>
+        </div>
+
+        <div v-if="showAccountModal" class="modal-overlay" @click="showAccountModal = false">
+            <div class="modal-content" @click.stop>
+                <div class="modal-header">
+                    <h3>Мой профиль</h3>
+                    <button class="modal-close" @click="showAccountModal = false">Закрыть</button>
+                </div>
+                <div class="modal-body">
+                    <div class="profile-avatar">R</div>
+                    <p><strong>Имя:</strong> {{ user.firstName }}</p>
+                    <p><strong>Фамилия:</strong> {{ user.lastName }}</p>
+                    <p><strong>Телефон:</strong> {{ user.phone }}</p>
+                    <p><strong>Рекорд:</strong> {{ highScore }} очков</p>
+                    <p><strong>Уничтожено:</strong> {{ totalKills }} роботов</p>
+                    <button class="btn-logout" @click="logout">Выйти из аккаунта</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="!registered" class="registration-container">
+            <div class="logo">
+                <h1>DDoS-Ниндзя</h1>
+                <p>Уничтожай роботов-злоумышленников</p>
+            </div>
+            
+            <div class="registration-form">
+                <h2>Регистрация</h2>
+                <form @submit.prevent="register">
+                    <div class="form-group">
+                        <label>Имя *</label>
+                        <input type="text" v-model="user.firstName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Фамилия *</label>
+                        <input type="text" v-model="user.lastName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Телефон *</label>
+                        <input type="tel" v-model="user.phone" placeholder="+7 (___)-___-__-__" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" v-model="user.consent" required>
+                            Я соглашаюсь на обработку персональных данных
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Начать охоту</button>
+                </form>
+                
+                <div class="telegram-option">
+                    <p>или</p>
+                    <button class="btn-telegram" @click="telegramAuth">
+                        Войти через Telegram
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div v-else-if="!gameActive && !gameEnded && !showAdminPanel && !showTournament" class="game-menu">
+            <div class="menu-content">
+                <h1>DDoS-Ниндзя</h1>
+                <p>Привет, {{ user.firstName }}! Готов уничтожать роботов?</p>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>Рекорд</h3>
+                        <p class="stat-value">{{ highScore }}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Уничтожено</h3>
+                        <p class="stat-value">{{ totalKills }}</p>
+                    </div>
+                </div>
+                
+                <button class="btn-play" @click="startGame">
+                    Начать битву
+                </button>
+                
+                <button class="btn-rules" @click="showRules = !showRules">
+                    Как играть?
+                </button>
+                
+                <button class="btn-tournament" @click="openTournament">
+                    Турнирная таблица
+                </button>
+                
+                <button class="btn-admin" @click="openAdminPanel">
+                    Админ-панель
+                </button>
+                
+                <div v-if="showRules" class="rules">
+                    <h3>Правила игры</h3>
+                    <p>Водите мышкой по экрану — уничтожайте роботов</p>
+                    <p>За каждого уничтоженного робота +10 очков</p>
+                    <p>Пропущенный робот = -5 очков</p>
+                    <p>У вас 3 жизни</p>
+                    <p>Время игры: 120 секунд</p>
+                    <p>Победа: 500+ очков</p>
+                </div>
+            </div>
+        </div>
+        
+        <div v-else-if="gameActive" class="game-container">
+            <div class="game-header">
+                <div class="game-info">
+                    <span>Очки: <strong>{{ score }}</strong></span>
+                    <span>Жизни: <strong>{{ lives }}</strong></span>
+                    <span>Время: <strong>{{ gameTime }}</strong>с</span>
+                    <span v-if="gameStatus" class="game-status" :class="gameStatusClass">{{ gameStatus }}</span>
+                </div>
+            </div>
+            <canvas id="gameCanvas" width="800" height="500"></canvas>
+            <button class="btn-exit" @click="exitGame">Выйти в меню</button>
+        </div>
+        
+        <div v-else-if="gameEnded && !showAdminPanel && !showTournament" class="game-menu result-screen">
+            <div class="menu-content">
+                <div class="result-status" :class="resultStatusClass">
+                    <h2>{{ resultStatus }}</h2>
+                </div>
+                <h1>Результаты битвы</h1>
+                <div class="result-stats">
+                    <div class="stat-card">
+                        <h3>Очки</h3>
+                        <p class="stat-value">{{ finalScore }}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Уничтожено</h3>
+                        <p class="stat-value">{{ finalKills }}</p>
+                    </div>
+                </div>
+                <button class="btn-play" @click="playAgain">Играть снова</button>
+                <button class="btn-rules" @click="backToMenu">В меню</button>
+            </div>
+        </div>
+        
+        <div v-else-if="showTournament" class="tournament-container">
+            <div class="admin-header">
+                <h2>Турнирная таблица</h2>
+                <button class="btn-close-admin" @click="showTournament = false">Закрыть</button>
+            </div>
+            
+            <div class="your-rank" v-if="myRank">
+                <div class="rank-card">
+                    <span class="rank-text">Ваше место: <strong>#{{ myRank }}</strong></span>
+                    <span class="rank-score">{{ myScore }} очков</span>
+                </div>
+            </div>
+            
+            <div class="tournament-stats">
+                <div class="stat-card">
+                    <h3>Всего игроков</h3>
+                    <p class="stat-value">{{ tournamentData.length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Рекорд</h3>
+                    <p class="stat-value">{{ topScore }}</p>
+                </div>
+            </div>
+            
+            <div class="tournament-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Имя</th>
+                            <th>Фамилия</th>
+                            <th>Очки</th>
+                            <th>Уничтожено</th>
+                            <th>Дата</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(player, index) in topTen" :key="index" :class="{ 'highlight-row': isCurrentPlayer(player) }">
+                            <td>{{ index + 1 }}</td>
+                            <td>{{ player.firstName }}</td>
+                            <td>{{ player.lastName }}</td>
+                            <td class="score-cell">{{ player.score }}</td>
+                            <td>{{ player.kills }}</td>
+                            <td>{{ player.date }}</td>
+                        </tr>
+                        <tr v-if="topTen.length === 0">
+                            <td colspan="6" class="empty-table">Нет данных. Сыграйте в игру</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="tournament-actions">
+                <button class="btn-export" @click="exportData">Экспорт CSV</button>
+                <button class="btn-back" @click="showTournament = false">Назад в меню</button>
+            </div>
+        </div>
+        
+        <div v-else-if="showAdminPanel" class="tournament-container">
+            <div class="admin-header">
+                <h2>Админ-панель</h2>
+                <button class="btn-close-admin" @click="showAdminPanel = false">Закрыть</button>
+            </div>
+            
+            <div class="tournament-stats">
+                <div class="stat-card">
+                    <h3>Всего игроков</h3>
+                    <p class="stat-value">{{ tournamentData.length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Рекорд</h3>
+                    <p class="stat-value">{{ topScore }}</p>
+                </div>
+            </div>
+            
+            <div class="tournament-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Имя</th>
+                            <th>Фамилия</th>
+                            <th>Телефон</th>
+                            <th>Очки</th>
+                            <th>Уничтожено</th>
+                            <th>Дата</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(player, index) in sortedTournament" :key="index">
+                            <td>{{ index + 1 }}</td>
+                            <td>{{ player.firstName }}</td>
+                            <td>{{ player.lastName }}</td>
+                            <td>{{ player.phone }}</td>
+                            <td class="score-cell">{{ player.score }}</td>
+                            <td>{{ player.kills }}</td>
+                            <td>{{ player.date }}</td>
+                            <td>
+                                <button class="btn-delete" @click="deletePlayer(index)">Удалить</button>
+                            </td>
+                        </tr>
+                        <tr v-if="tournamentData.length === 0">
+                            <td colspan="8" class="empty-table">Нет данных. Сыграйте в игру</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="admin-actions">
+                <button class="btn-export" @click="exportData">Экспорт CSV</button>
+                <button class="btn-clear" @click="clearAllData">Очистить все</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="game.js"></script>
+    <script src="app.js"></script>
+    <script src="cyber-bg.js"></script>
+</body>
+</html>
