@@ -9,20 +9,20 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Кибер-фон - на самом нижнем слое -->
     <div class="cyber-bg">
-        <div class="hex-grid"></div>
         <canvas id="cyberCanvas" class="cyber-canvas"></canvas>
+        <div class="hex-grid"></div>
     </div>
     
+    <!-- Основное содержимое - поверх фона -->
     <div id="app">
         <!-- Логотип -->
         <div class="app-logo" @click="backToMenu">
             <img src="pictures/Logo_basic_inversion_mono.svg" alt="DDoS-Ниндзя" class="logo-img">
         </div>
         
-        <!-- Шапка с аккаунтом - теперь на ВСЕХ страницах после регистрации -->
-         <div v-else-if="!gameActive && !gameEnded && !showAdminPanel && !showTournament" class="game-menu">
-         </div>
+        <!-- Шапка с аккаунтом -->
         <div class="account-header" v-if="registered">
             <div class="account-info" @click="showAccountModal = true">
                 <div class="avatar">{{ user.firstName ? user.firstName.charAt(0) : '?' }}{{ user.lastName ? user.lastName.charAt(0) : '?' }}</div>
@@ -97,7 +97,7 @@
             </div>
         </div>
         
-        <!-- Меню игры (показывается после регистрации) -->
+        <!-- Меню игры -->
         <div v-else-if="!gameActive && !gameEnded && !showAdminPanel && !showTournament" class="game-menu">
             <div class="menu-content">
                 <h1>DDoS-Ниндзя</h1>
@@ -130,7 +130,6 @@
                     Админ-панель
                 </button>
                 
-                <!-- Новая кнопка отключения уведомлений -->
                 <button class="btn-notifications" :class="notificationsButtonClass" @click="toggleNotifications">
                     {{ notificationsButtonText }}
                 </button>
@@ -300,7 +299,7 @@
             </div>
         </div>
         
-        <!-- Большое выезжающее фото - ИЗНАЧАЛЬНО СКРЫТО -->
+        <!-- Большое выезжающее фото -->
         <div id="bigPhotoSlide" class="big-photo-slide" style="display: none;">
             <div class="big-photo-content">
                 <img id="bigPhotoImage" class="big-photo-image" src="" alt="Fact">
@@ -310,6 +309,7 @@
                 <button class="big-photo-close" @click="closeBigPhoto">×</button>
             </div>
         </div>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
     <script src="game.js"></script>
