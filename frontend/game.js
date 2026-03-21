@@ -31,7 +31,7 @@ function loadRobotImages() {
         const img = new Image();
         img.src = url;
         img.onload = () => {
-            console.log(`✅ Робот типа ${type} загружен`);
+            console.log(`Робот типа ${type} загружен`);
         };
         robotImages[type] = img;
     }
