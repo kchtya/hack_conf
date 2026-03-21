@@ -2,36 +2,58 @@
 let gameCanvas = null;
 let ctx = null;
 
-// Загружаем ваш SVG файл
-const robotImg = new Image();
-robotImg.src = 'robot.svg?' + Date.now();
+// Функция для создания цветного SVG робота
+function createColoredRobotSVG(color) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path fill="${color}" d="M352 64C352 46.3 337.7 32 320 32C302.3 32 288 46.3 288 64L288 128L192 128C139 128 96 171 96 224L96 448C96 501 139 544 192 544L448 544C501 544 544 501 544 448L544 224C544 171 501 128 448 128L352 128L352 64zM160 432C160 418.7 170.7 408 184 408L216 408C229.3 408 240 418.7 240 432C240 445.3 229.3 456 216 456L184 456C170.7 456 160 445.3 160 432zM280 432C280 418.7 290.7 408 304 408L336 408C349.3 408 360 418.7 360 432C360 445.3 349.3 456 336 456L304 456C290.7 456 280 445.3 280 432zM400 432C400 418.7 410.7 408 424 408L456 408C469.3 408 480 418.7 480 432C480 445.3 469.3 456 456 456L424 456C410.7 456 400 445.3 400 432zM224 240C250.5 240 272 261.5 272 288C272 314.5 250.5 336 224 336C197.5 336 176 314.5 176 288C176 261.5 197.5 240 224 240zM368 288C368 261.5 389.5 240 416 240C442.5 240 464 261.5 464 288C464 314.5 442.5 336 416 336C389.5 336 368 314.5 368 288zM64 288C64 270.3 49.7 256 32 256C14.3 256 0 270.3 0 288L0 384C0 401.7 14.3 416 32 416C49.7 416 64 401.7 64 384L64 288zM608 256C590.3 256 576 270.3 576 288L576 384C576 401.7 590.3 416 608 416C625.7 416 640 401.7 640 384L640 288C640 270.3 625.7 256 608 256z"/></svg>`;
+}
 
-let svgLoaded = false;
+// Кэш для загруженных SVG изображений
+const robotImages = {
+    normal: null,
+    fast: null,
+    small: null,
+    boss: null
+};
 
-robotImg.onload = () => {
-    svgLoaded = true;
-    console.log('SVG робота успешно загружен');
-};
-robotImg.onerror = () => {
-    console.error('Ошибка загрузки robot.svg');
-};
+// Загружаем роботов разных цветов
+function loadRobotImages() {
+    const colors = {
+        normal: '#6b4eff',   // фиолетовый
+        fast: '#3a86ff',     // синий
+        small: '#38b000',    // зеленый
+        boss: '#d90429'      // красный
+    };
+    
+    for (const [type, color] of Object.entries(colors)) {
+        const svg = createColoredRobotSVG(color);
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+            console.log(`✅ Робот типа ${type} загружен`);
+        };
+        robotImages[type] = img;
+    }
+}
+
+// Загружаем сразу
+loadRobotImages();
 
 let width, height;
 let gameActive = false;
 let score = 0;
-let lives = 15;  // Жизни увеличены до 15
+let lives = 15;
 let timeLeft = 90;
 let spawnInterval = null;
 let currentTimer = null;
 let animationId = null;
 let highScore = localStorage.getItem('ddosHighScore') || 0;
 
-// Объекты игры
 let robots = [];
 let particles = [];
 let trailPoints = [];
 
-// Глобальные переменные для Vue
 window.gameState = {
     score: 0,
     lives: 15,
@@ -39,102 +61,87 @@ window.gameState = {
     isActive: false
 };
 
-// ==================== РОБОТ С ПРАВИЛЬНОЙ ФИЗИКОЙ ====================
+// ==================== РОБОТ ====================
 class Robot {
     constructor(x, y) {
+        // Типы роботов
         const types = ['normal', 'fast', 'small', 'boss'];
         const type = types[Math.floor(Math.random() * types.length)];
         
         switch(type) {
             case 'fast':
-                this.color = '#0077ff';
-                this.size = 52;
+                this.color = '#3a86ff';
+                this.size = 65;
                 this.points = 20;
+                this.speedMult = 1.4;
                 break;
             case 'small':
-                this.color = '#00ffaa';
-                this.size = 46;
+                this.color = '#38b000';
+                this.size = 55;
                 this.points = 25;
+                this.speedMult = 1.2;
                 break;
             case 'boss':
-                this.color = '#ff6666';
-                this.size = 68;
+                this.color = '#d90429';
+                this.size = 85;
                 this.points = 60;
+                this.speedMult = 0.65;
                 break;
             default:
-                this.color = '#ffffff';
-                this.size = 56;
+                this.color = '#6b4eff';
+                this.size = 70;
                 this.points = 10;
+                this.speedMult = 1;
         }
         
+        this.type = type;
         this.x = x;
         this.y = y;
-        this.type = type;
-        this.radius = this.size * 0.55;
+        this.radius = this.size * 0.4;
         this.wasHit = false;
         this.rotation = 0;
-        this.eyeBlink = 0;
+        this.blinkTimer = 0;
+        this.isCut = false;
         
-        // ========== ПРАВИЛЬНАЯ ФИЗИКА ==========
-        this.state = 'rising'; // rising, hanging, falling
+        // ФИЗИКА - ВЗЛЕТАЮТ ВЫСОКО 380-480
+        this.startY = y;
+        this.vy = -18 * this.speedMult;
+        this.vx = (Math.random() - 0.5) * 1.2;
+        this.gravity = 0.48;
         
-        // Случайная высота подъема (от 150 до 350 пикселей вверх)
-        const jumpHeight = 180 + Math.random() * 220;
-        this.peakY = y - jumpHeight;
+        this.hoverTimer = 0;
+        this.maxHover = 18 + Math.random() * 15;
+        this.isHovering = false;
         
-        // Начальная скорость вверх
-        this.velocityY = -Math.sqrt(2 * 0.42 * jumpHeight);
-        this.velocityX = (Math.random() - 0.5) * 1.5;
-        this.gravity = 0.42;
-        
-        // Время зависания в верхней точке (кадры)
-        this.hangFrames = 0;
-        this.maxHangFrames = 20 + Math.random() * 25;
+        // ВЫСОТА ПОДЪЕМА 380-480 ПИКСЕЛЕЙ
+        this.maxHeight = y - 380 - Math.random() * 100;
     }
     
     update() {
-        switch(this.state) {
-            case 'rising':
-                this.velocityY += this.gravity;
-                this.y += this.velocityY;
-                this.x += this.velocityX;
-                this.rotation += 0.02;
-                
-                if (this.velocityY >= 0) {
-                    this.state = 'hanging';
-                    this.hangFrames = 0;
-                    this.velocityY = 0;
-                }
-                break;
-                
-            case 'hanging':
-                this.hangFrames++;
-                this.x += this.velocityX * 0.1;
-                this.rotation = Math.sin(this.hangFrames * 0.15) * 0.05;
-                
-                if (this.hangFrames >= this.maxHangFrames) {
-                    this.state = 'falling';
-                    this.velocityY = 1.5;
-                }
-                break;
-                
-            case 'falling':
-                this.velocityY += this.gravity;
-                this.y += this.velocityY;
-                this.x += this.velocityX;
-                this.rotation += 0.06;
-                break;
-
-                this.velocityY += this.gravity;
-                if (this.velocityY > 15) this.velocityY = 15;
-                this.y += this.velocityY;
-                this.x += this.velocityX;
-                this.rotation += 0.06;
-                break;
+        if (!this.isHovering && this.vy < 0 && this.y <= this.maxHeight) {
+            this.isHovering = true;
+            this.hoverTimer = 0;
+            this.vy = 0;
         }
         
-        this.eyeBlink++;
-        if (this.eyeBlink > 80) this.eyeBlink = 0;
+        if (this.isHovering) {
+            this.hoverTimer++;
+            this.rotation = Math.sin(this.hoverTimer * 0.15) * 0.12;
+            
+            if (this.hoverTimer >= this.maxHover) {
+                this.isHovering = false;
+                this.vy = 3.5;
+            }
+        } else {
+            this.vy += this.gravity;
+            this.rotation += 0.06;
+        }
+        
+        this.y += this.vy;
+        this.x += this.vx;
+        
+        this.blinkTimer++;
+        if (this.blinkTimer > 65) this.blinkTimer = 0;
     }
     
     draw(ctx) {
@@ -143,18 +150,17 @@ class Robot {
         ctx.rotate(this.rotation);
         
         const size = this.size;
+        const robotImg = robotImages[this.type];
         
-        if (svgLoaded && robotImg.complete) {
+        if (robotImg && robotImg.complete && robotImg.naturalWidth > 0) {
             try {
+                // Рисуем цветного SVG робота
                 ctx.drawImage(robotImg, -size / 2, -size / 2, size, size);
                 
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.fillStyle = this.color;
-                ctx.fillRect(-size / 2, -size / 2, size, size);
-                ctx.globalCompositeOperation = 'source-over';
-                
-                ctx.shadowBlur = 12;
+                // Добавляем свечение цветом
+                ctx.shadowBlur = 15;
                 ctx.shadowColor = this.color;
+                
             } catch(e) {
                 this.drawFallback(ctx, size);
             }
@@ -167,70 +173,78 @@ class Robot {
     }
     
     drawFallback(ctx, size) {
+        // Запасной вариант - если SVG не загрузился
         ctx.fillStyle = this.color;
-        ctx.fillRect(-size / 2, -size / 2, size, size);
+        ctx.shadowBlur = 12;
         
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Глаза
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(-size * 0.2, -size * 0.1, size * 0.1, 0, Math.PI * 2);
-        ctx.arc(size * 0.2, -size * 0.1, size * 0.1, 0, Math.PI * 2);
+        ctx.arc(-size * 0.2, -size * 0.1, size * 0.12, 0, Math.PI * 2);
+        ctx.arc(size * 0.2, -size * 0.1, size * 0.12, 0, Math.PI * 2);
         ctx.fill();
         
+        const pupilSize = this.blinkTimer < 6 ? size * 0.04 : size * 0.08;
         ctx.fillStyle = '#000000';
         ctx.beginPath();
-        ctx.arc(-size * 0.2, -size * 0.1, size * 0.06, 0, Math.PI * 2);
-        ctx.arc(size * 0.2, -size * 0.1, size * 0.06, 0, Math.PI * 2);
+        ctx.arc(-size * 0.2, -size * 0.1, pupilSize, 0, Math.PI * 2);
+        ctx.arc(size * 0.2, -size * 0.1, pupilSize, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, size * 0.15, size * 0.12, 0, Math.PI);
-        ctx.stroke();
-        
+        // Антенна
         ctx.beginPath();
         ctx.moveTo(0, -size / 2);
-        ctx.lineTo(0, -size / 2 - size * 0.2);
+        ctx.lineTo(0, -size / 2 - 12);
+        ctx.strokeStyle = '#ffaa44';
+        ctx.lineWidth = 4;
         ctx.stroke();
-        ctx.fillStyle = '#ffaa55';
+        
+        ctx.fillStyle = '#ffaa44';
         ctx.beginPath();
-        ctx.arc(0, -size / 2 - size * 0.2, size * 0.08, 0, Math.PI * 2);
+        ctx.arc(0, -size / 2 - 12, size * 0.1, 0, Math.PI * 2);
         ctx.fill();
     }
     
     shouldRemove() {
-        return this.y > height + 200 || this.y < -200 || this.x < -200 || this.x > width + 200;
+        return this.y > height + 150 || this.y < -200;
     }
 }
 
-// ==================== ЭФФЕКТЫ ====================
+// ==================== ЧАСТИЦЫ ====================
 class Particle {
     constructor(x, y, color) {
         this.x = x;
         this.y = y;
-        this.vx = (Math.random() - 0.5) * 6;
-        this.vy = (Math.random() - 0.5) * 6;
+        this.vx = (Math.random() - 0.5) * 14;
+        this.vy = (Math.random() - 0.5) * 12 - 6;
         this.life = 1;
         this.color = color;
-        this.size = Math.random() * 2 + 1;
+        this.size = Math.random() * 5 + 2;
     }
     
     update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.vy += 0.1;
-        this.life -= 0.02;
+        this.vy += 0.2;
+        this.life -= 0.03;
         return this.life > 0;
     }
     
     draw(ctx) {
         ctx.globalAlpha = this.life;
         ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.size, this.size);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
         ctx.globalAlpha = 1;
     }
 }
 
+// ==================== СЛЕД (НЕПРЕРЫВНАЯ ЛИНИЯ) ====================
 class TrailPoint {
     constructor(x, y) {
         this.x = x;
@@ -239,47 +253,58 @@ class TrailPoint {
     }
     
     update() {
-        this.life -= 0.05;
+        this.life -= 0.04;
         return this.life > 0;
     }
 }
 
-function createSliceEffect(x, y) {
-    for (let i = 0; i < 20; i++) {
-        particles.push(new Particle(x, y, '#00ffaa'));
-    }
-    playSound();
-}
+let trailPointsList = [];
 
-function createMissEffect(x, y) {
-    for (let i = 0; i < 12; i++) {
-        particles.push(new Particle(x, y, '#ff6666'));
-    }
-}
-
-function playSound() {
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.frequency.value = 800;
-        gainNode.gain.value = 0.08;
-        oscillator.start();
-        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.1);
-        oscillator.stop(audioCtx.currentTime + 0.1);
-    } catch(e) {}
-}
-
-// ==================== СЛЕД ОТ КУРСОРА ====================
 function addTrailPoint(x, y) {
-    trailPoints.push(new TrailPoint(x, y));
-    if (trailPoints.length > 15) trailPoints.shift();
+    trailPointsList.push(new TrailPoint(x, y));
+    while (trailPointsList.length > 40) trailPointsList.shift();
 }
 
-// ==================== ПРОВЕРКА ПОПАДАНИЯ ====================
-function checkHit(clientX, clientY) {
+function drawTrail() {
+    if (trailPointsList.length < 2) return;
+    
+    ctx.save();
+    ctx.shadowBlur = 0;
+    
+    ctx.beginPath();
+    ctx.moveTo(trailPointsList[0].x, trailPointsList[0].y);
+    for (let i = 1; i < trailPointsList.length; i++) {
+        ctx.lineTo(trailPointsList[i].x, trailPointsList[i].y);
+    }
+    
+    const gradient = ctx.createLinearGradient(
+        trailPointsList[0].x, trailPointsList[0].y,
+        trailPointsList[trailPointsList.length - 1].x, trailPointsList[trailPointsList.length - 1].y
+    );
+    gradient.addColorStop(0, '#ff6b4e');
+    gradient.addColorStop(0.5, '#ffaa44');
+    gradient.addColorStop(1, '#ff6b4e');
+    
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(trailPointsList[0].x, trailPointsList[0].y);
+    for (let i = 1; i < trailPointsList.length; i++) {
+        ctx.lineTo(trailPointsList[i].x, trailPointsList[i].y);
+    }
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    
+    ctx.restore();
+}
+
+// ==================== РЕЗАНИЕ ПРИ НАВЕДЕНИИ ====================
+function checkSlice(clientX, clientY) {
     if (!gameActive) return;
     
     const rect = gameCanvas.getBoundingClientRect();
@@ -290,122 +315,115 @@ function checkHit(clientX, clientY) {
     
     addTrailPoint(mouseX, mouseY);
     
-    let hitIndex = -1;
-    let minDistance = 40;
-    
-    for (let i = 0; i < robots.length; i++) {
+    for (let i = robots.length - 1; i >= 0; i--) {
         const robot = robots[i];
         const dx = mouseX - robot.x;
         const dy = mouseY - robot.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = Math.sqrt(dx * dx + dy * dy);
         
-        if (distance < robot.radius && distance < minDistance) {
-            minDistance = distance;
-            hitIndex = i;
+        if (dist < robot.radius && !robot.isCut) {
+            robot.isCut = true;
+            score += robot.points;
+            window.gameState.score = score;
+            
+            // Эффект разрушения
+            for (let j = 0; j < 35; j++) {
+                particles.push(new Particle(robot.x, robot.y, robot.color));
+            }
+            for (let j = 0; j < 20; j++) {
+                particles.push(new Particle(robot.x, robot.y, '#ffaa44'));
+            }
+            
+            // Звук
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.value = 800 + Math.random() * 200;
+                gain.gain.value = 0.12;
+                osc.start();
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.12);
+                osc.stop(audioCtx.currentTime + 0.12);
+            } catch(e) {}
+            
+            if (navigator.vibrate) navigator.vibrate(40);
+            
+            robots.splice(i, 1);
         }
     }
-    
-    if (hitIndex !== -1) {
-        const hit = robots[hitIndex];
-        score += hit.points;
-        
-        // Обновляем глобальное состояние
-        window.gameState.score = score;
-        
-        createSliceEffect(hit.x, hit.y);
-        
-        robots.splice(hitIndex, 1);
-        
-        if (navigator.vibrate) navigator.vibrate(50);
-    }
 }
 
-// ==================== СПАВН РОБОТОВ ====================
-function spawnRobot() {
-    if (!gameActive) return;
-    
-    const x = Math.random() * (width - 140) + 70;
-    const y = height - 30;
-    
-    const robot = new Robot(x, y);
-    robots.push(robot);
-}
-
-// ==================== ФИЗИКА С ЖИЗНЯМИ ====================
-function updatePhysics() {
-    if (!gameActive) return;
-    
-    for (let i = 0; i < robots.length; i++) {
+// ==================== ПРОВЕРКА ПРОПУЩЕННЫХ ====================
+function checkMissed() {
+    for (let i = robots.length - 1; i >= 0; i--) {
         const robot = robots[i];
-        robot.update();
         
-        if (robot.shouldRemove()) {
+        if (robot.y > height + 100 || robot.y < -150) {
             if (!robot.wasHit) {
                 robot.wasHit = true;
-                
-                // Отнимаем жизнь за улетевшего робота
                 lives--;
                 window.gameState.lives = lives;
                 
-                createMissEffect(robot.x, robot.y);
+                for (let j = 0; j < 25; j++) {
+                    particles.push(new Particle(robot.x, robot.y, '#ff4444'));
+                }
                 
-                // Проверка на поражение (жизни закончились)
                 if (lives <= 0) {
                     endGame();
                     return;
                 }
             }
             robots.splice(i, 1);
-            i--;
         }
     }
 }
 
-// ==================== ОТРИСОВКА ====================
+// ==================== СПАВН ====================
+function spawnRobot() {
+    if (!gameActive) return;
+    
+    const margin = 70;
+    const x = margin + Math.random() * (width - margin * 2);
+    const y = height - 35;
+    
+    const robot = new Robot(x, y);
+    robots.push(robot);
+}
+
+// ==================== ОТРИСОВКА ФОНА ====================
 function drawBackground() {
-    ctx.fillStyle = '#0a0e14';
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0, '#0a0c18');
+    gradient.addColorStop(0.5, '#0f1222');
+    gradient.addColorStop(1, '#080b15');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
     
-    ctx.strokeStyle = '#0077ff';
+    ctx.strokeStyle = '#6b4eff';
     ctx.lineWidth = 0.5;
     ctx.globalAlpha = 0.2;
+    
     for (let i = 0; i < width; i += 50) {
         ctx.beginPath();
         ctx.moveTo(i, 0);
         ctx.lineTo(i, height);
         ctx.stroke();
+    }
+    for (let i = 0; i < height; i += 50) {
         ctx.beginPath();
         ctx.moveTo(0, i);
         ctx.lineTo(width, i);
         ctx.stroke();
     }
+    
     ctx.globalAlpha = 1;
     
     for (let i = 0; i < 200; i++) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5})`;
-        ctx.fillRect((i * 131) % width, (i * 253) % height, 1, 1);
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.4})`;
+        ctx.fillRect((i * 131) % width, (i * 253) % height, 1.5, 1.5);
     }
-    
-    ctx.strokeStyle = '#00ffaa';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.4;
-    ctx.beginPath();
-    ctx.moveTo(0, height - 35);
-    ctx.lineTo(width, height - 35);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-}
-
-function drawTrail() {
-    for (let i = 0; i < trailPoints.length; i++) {
-        const point = trailPoints[i];
-        ctx.globalAlpha = point.life * 0.5;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 6 * point.life, 0, Math.PI * 2);
-        ctx.fillStyle = '#00ffaa';
-        ctx.fill();
-    }
-    ctx.globalAlpha = 1;
 }
 
 function draw() {
@@ -417,6 +435,8 @@ function draw() {
         robot.draw(ctx);
     }
     
+    drawTrail();
+    
     for (let i = 0; i < particles.length; i++) {
         const updated = particles[i].update();
         particles[i].draw(ctx);
@@ -426,42 +446,34 @@ function draw() {
         }
     }
     
-    drawTrail();
-    
-    for (let i = 0; i < trailPoints.length; i++) {
-        const updated = trailPoints[i].update();
+    for (let i = 0; i < trailPointsList.length; i++) {
+        const updated = trailPointsList[i].update();
         if (!updated) {
-            trailPoints.splice(i, 1);
+            trailPointsList.splice(i, 1);
             i--;
         }
     }
 }
 
-// ==================== УПРАВЛЕНИЕ ИГРОЙ ====================
+// ==================== УПРАВЛЕНИЕ ====================
 function startGameInternal() {
-    if (spawnInterval) {
-        clearInterval(spawnInterval);
-        spawnInterval = null;
-    }
-    if (currentTimer) {
-        clearInterval(currentTimer);
-        currentTimer = null;
-    }
+    if (spawnInterval) clearInterval(spawnInterval);
+    if (currentTimer) clearInterval(currentTimer);
     
     gameActive = true;
     score = 0;
-    lives = 15;  // 15 жизней
+    lives = 15;
     timeLeft = 90;
     robots = [];
     particles = [];
-    trailPoints = [];
+    trailPointsList = [];
     
     window.gameState.score = 0;
     window.gameState.lives = 15;
     window.gameState.timeLeft = 90;
     window.gameState.isActive = true;
     
-    spawnInterval = setInterval(spawnRobot, 750);
+    spawnInterval = setInterval(spawnRobot, 700);
     
     currentTimer = setInterval(() => {
         if (gameActive && timeLeft > 0) {
@@ -478,218 +490,85 @@ function endGame() {
     gameActive = false;
     window.gameState.isActive = false;
     
-    if (spawnInterval) {
-        clearInterval(spawnInterval);
-        spawnInterval = null;
-    }
-    if (currentTimer) {
-        clearInterval(currentTimer);
-        currentTimer = null;
-    }
+    if (spawnInterval) clearInterval(spawnInterval);
+    if (currentTimer) clearInterval(currentTimer);
     
-    // Сохраняем рекорд
     if (score > highScore) {
         highScore = score;
         localStorage.setItem('ddosHighScore', highScore);
     }
     
-    // Вызываем колбэк если есть
     if (window.onGameEnd) {
         window.onGameEnd(score, Math.floor(score / 10));
     }
 }
 
-// ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
-function setupEventListeners() {
-    if (!gameCanvas) return;
+function updateGame() {
+    if (!gameActive) return;
     
-    gameCanvas.addEventListener('mousemove', (e) => {
-        e.preventDefault();
-        checkHit(e.clientX, e.clientY);
-    });
-    
-    gameCanvas.addEventListener('mousemove', (e) => {
-        if (!gameActive) return;
-        const rect = gameCanvas.getBoundingClientRect();
-        const scaleX = gameCanvas.width / rect.width;
-        const scaleY = gameCanvas.height / rect.height;
-        const mouseX = (e.clientX - rect.left) * scaleX;
-        const mouseY = (e.clientY - rect.top) * scaleY;
-        addTrailPoint(mouseX, mouseY);
-    });
-    
-    gameCanvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const touch = e.touches[0];
-        checkHit(touch.clientX, touch.clientY);
-    }, { passive: false });
-    
-    gameCanvas.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        if (!gameActive) return;
-        const touch = e.touches[0];
-        const rect = gameCanvas.getBoundingClientRect();
-        const scaleX = gameCanvas.width / rect.width;
-        const scaleY = gameCanvas.height / rect.height;
-        const touchX = (touch.clientX - rect.left) * scaleX;
-        const touchY = (touch.clientY - rect.top) * scaleY;
-        addTrailPoint(touchX, touchY);
-    }, { passive: false });
-}
-
-function resizeCanvasInternal() {
-    if (!gameCanvas) return;
-    const container = gameCanvas.parentElement;
-    if (container) {
-        width = container.clientWidth;
-        height = container.clientHeight - 80; // вычитаем высоту game-info
-        gameCanvas.width = width;
-        gameCanvas.height = height;
-        console.log('Canvas resized:', width, height);
+    for (const robot of robots) {
+        robot.update();
     }
+    checkMissed();
 }
 
-// ==================== АНИМАЦИЯ ====================
 function animateGame() {
-    if (gameActive) {
-        updatePhysics();
-        
-        // Отладка: выводим состояние первого робота
-        if (robots.length > 0) {
-            const r = robots[0];
-            console.log('Робот:', r.state, 'y:', r.y.toFixed(1), 'vy:', r.velocityY.toFixed(2));
-        }
-    }
+    updateGame();
     draw();
     animationId = requestAnimationFrame(animateGame);
 }
 
-
-// ==================== ЭКСПОРТ ДЛЯ ИНТЕГРАЦИИ ====================
-window.startDDoSGame = function(canvas, onEnd) {
-    // Останавливаем предыдущую игру
-    if (animationId) {
-        cancelAnimationFrame(animationId);
-    }
-    
-    // Устанавливаем новый canvas
-    gameCanvas = canvas;
-    ctx = gameCanvas.getContext('2d');
-    
-    // Настраиваем колбэк
-    window.onGameEnd = onEnd;
-    
-    // Инициализируем
-    resizeCanvasInternal();
-    setupEventListeners(
-        // В функции setupEventListeners или в начале файла
-function setupTouchEvents() {
+// ==================== СОБЫТИЯ ====================
+function setupEvents() {
     if (!gameCanvas) return;
     
-    // Отключаем прокрутку страницы при касании canvas
-    gameCanvas.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        const touch = e.touches[0];
-        checkHit(touch.clientX, touch.clientY);
-    }, { passive: false });
+    gameCanvas.addEventListener('mousemove', (e) => {
+        if (!gameActive) return;
+        checkSlice(e.clientX, e.clientY);
+    });
     
     gameCanvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
         if (!gameActive) return;
         const touch = e.touches[0];
-        const rect = gameCanvas.getBoundingClientRect();
-        const scaleX = gameCanvas.width / rect.width;
-        const scaleY = gameCanvas.height / rect.height;
-        const touchX = (touch.clientX - rect.left) * scaleX;
-        const touchY = (touch.clientY - rect.top) * scaleY;
-        addTrailPoint(touchX, touchY);
+        checkSlice(touch.clientX, touch.clientY);
     }, { passive: false });
-    
-    gameCanvas.addEventListener('touchend', (e) => {
-        e.preventDefault();
-    });
 }
-    );
+
+function resizeCanvas() {
+    if (!gameCanvas) return;
+    const rect = gameCanvas.parentElement.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+    gameCanvas.width = width;
+    gameCanvas.height = height;
+}
+
+// ==================== ЭКСПОРТ ====================
+window.startDDoSGame = function(canvas, onEnd) {
+    if (animationId) cancelAnimationFrame(animationId);
     
-    // Запускаем игру
+    gameCanvas = canvas;
+    ctx = gameCanvas.getContext('2d');
+    window.onGameEnd = onEnd;
+    
+    resizeCanvas();
+    setupEvents();
     startGameInternal();
-    
-    // Запускаем анимацию
     animateGame();
     
-    // Возвращаем объект управления
     return {
-        isActive: true,
-        score: score,
-        lives: lives,
-        timeLeft: timeLeft,
         destroy: function() {
             gameActive = false;
-            window.gameState.isActive = false;
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-            }
+            if (animationId) cancelAnimationFrame(animationId);
             if (spawnInterval) clearInterval(spawnInterval);
             if (currentTimer) clearInterval(currentTimer);
-            robots = [];
         }
     };
-    // Принудительное обновление размеров canvas при загрузке
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        if (typeof resizeCanvas === 'function') {
-            resizeCanvas();
-        }
-        console.log('Canvas размеры обновлены');
-    }, 100);
-});
-
-// Экспортируем функцию для ручного обновления
-window.updateCanvasSize = function() {
-    if (typeof resizeCanvas === 'function') {
-        resizeCanvas();
-    }
-};
 };
 
-window.addEventListener('resize', () => {
-    resizeCanvasInternal();
-});
+window.updateCanvasSize = resizeCanvas;
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('load', () => setTimeout(resizeCanvas, 100));
 
-// Принудительное обновление размеров canvas при загрузке
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        if (typeof resizeCanvasInternal === 'function') {
-            resizeCanvasInternal();
-        }
-        console.log('Canvas размеры обновлены');
-    }, 100);
-});
-
-// Экспортируем функцию для ручного обновления
-window.updateCanvasSize = function() {
-    if (typeof resizeCanvasInternal === 'function') {
-        resizeCanvasInternal();
-    }
-};
-
-// Функция для обновления размеров canvas
-function resizeCanvasInternal() {
-    if (!gameCanvas) return;
-    const container = gameCanvas.parentElement;
-    if (container) {
-        const rect = container.getBoundingClientRect();
-        width = rect.width - 40;
-        height = rect.height - 100;
-        gameCanvas.width = width;
-        gameCanvas.height = height;
-        console.log('Canvas resized:', width, height);
-    }
-}
-
-// Добавляем слушатель изменения размера окна
-window.addEventListener('resize', () => {
-    resizeCanvasInternal();
-});
-
-console.log('DDoS Ниндзя готова к интеграции! Жизней: 15');
+console.log('DDoS Ниндзя готова! Цветные роботы, взлетают на 380-480px, режутся при наведении');
