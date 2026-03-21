@@ -17,13 +17,13 @@
     
     <!-- Основное содержимое - поверх фона -->
     <div id="app">
-        <!-- Логотип -->
-        <div class="app-logo" @click="backToMenu">
+        <!-- Логотип - скрывается во время игры, в турнирной таблице и админ-панели -->
+        <div class="app-logo" :class="{ 'hide-during-game': gameActive || showTournament || showAdminPanel }" @click="backToMenu">
             <img src="pictures/Logo_basic_inversion_mono.svg" alt="DDoS-Ниндзя" class="logo-img">
         </div>
         
-        <!-- Шапка с аккаунтом -->
-        <div class="account-header" v-if="registered">
+        <!-- Шапка с аккаунтом - скрывается во время игры, в турнирной таблице и админ-панели -->
+        <div class="account-header" v-if="registered" :class="{ 'hide-during-game': gameActive || showTournament || showAdminPanel }">
             <div class="account-info" @click="showAccountModal = true">
                 <div class="avatar">{{ user.firstName ? user.firstName.charAt(0) : '?' }}{{ user.lastName ? user.lastName.charAt(0) : '?' }}</div>
                 <div class="account-details">
@@ -136,12 +136,12 @@
                 
                 <div v-if="showRules" class="rules">
                     <h3>Правила игры</h3>
-                    <p>⚔️ Водите мышкой/пальцем по экрану — разрезайте роботов</p>
-                    <p>🤖 За каждого уничтоженного робота +10 очков</p>
-                    <p>💔 Пропущенный робот = -1 жизнь</p>
-                    <p>❤️ У вас 15 жизней</p>
-                    <p>⏱ Время игры: 90 секунд</p>
-                    <p>🏆 Победа: 250+ очков</p>
+                    <p> Водите мышкой/пальцем по экрану — разрезайте роботов</p>
+                    <p> За каждого уничтоженного робота +10 очков</p>
+                    <p> Пропущенный робот = -1 жизнь</p>
+                    <p> У вас 15 жизней</p>
+                    <p> Время игры: 90 секунд</p>
+                    <p> Победа: 250+ очков</p>
                 </div>
             </div>
         </div>

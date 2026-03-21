@@ -70,7 +70,7 @@ new Vue({
             return this.resultStatus === 'ПОБЕДА' ? 'status-win' : 'status-lose';
         },
         notificationsButtonText() {
-            return this.notificationsEnabled ? '🔔 Отключить уведомления' : '🔕 Включить уведомления';
+            return this.notificationsEnabled ? ' Отключить уведомления' : ' Включить уведомления';
         },
         notificationsButtonClass() {
             return this.notificationsEnabled ? 'btn-notifications on' : 'btn-notifications';
@@ -292,9 +292,23 @@ new Vue({
                     return;
                 }
                 
+                // Небольшая задержка для применения CSS скрытия элементов (логотип, кнопка аккаунта)
                 setTimeout(() => {
+                    // Обновляем размер canvas после того как элементы скрылись
                     if (typeof window.updateCanvasSize === 'function') {
                         window.updateCanvasSize();
+                        console.log('Canvas размер обновлен после скрытия элементов');
+                    }
+                    
+                    // Дополнительная проверка видимости canvas
+                    const rect = canvas.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) {
+                        console.warn('Canvas имеет нулевой размер, повторное обновление через 100мс');
+                        setTimeout(() => {
+                            if (typeof window.updateCanvasSize === 'function') {
+                                window.updateCanvasSize();
+                            }
+                        }, 100);
                     }
                 }, 50);
                 

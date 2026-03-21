@@ -1333,3 +1333,9 @@ body {
 .big-photo-slide {
     z-index: 200;
 }
+
+
+/* Скрытие элементов во время игры */
+.hide-during-game {
+    display: none !important;
+}

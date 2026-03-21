@@ -567,6 +567,27 @@ window.startDDoSGame = function(canvas, onEnd) {
     };
 };
 
+// Функция для обновления размера canvas с задержкой
+window.updateCanvasSize = function() {
+    if (gameCanvas) {
+        setTimeout(() => {
+            const rect = gameCanvas.parentElement?.getBoundingClientRect();
+            if (rect && rect.width > 0 && rect.height > 0) {
+                width = rect.width;
+                height = rect.height;
+                gameCanvas.width = width;
+                gameCanvas.height = height;
+                console.log('Canvas размер обновлен:', width, 'x', height);
+            }
+        }, 100);
+    }
+};
+
+// Следим за изменением размера окна
+window.addEventListener('resize', () => {
+    setTimeout(window.updateCanvasSize, 150);
+});
+
 window.updateCanvasSize = resizeCanvas;
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('load', () => setTimeout(resizeCanvas, 100));
