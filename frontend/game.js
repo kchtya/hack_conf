@@ -31,7 +31,7 @@ function loadRobotImages() {
         const img = new Image();
         img.src = url;
         img.onload = () => {
-            console.log(`✅ Робот типа ${type} загружен`);
+            console.log(`Робот типа ${type} загружен`);
         };
         robotImages[type] = img;
     }
@@ -592,4 +592,4 @@ window.updateCanvasSize = resizeCanvas;
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('load', () => setTimeout(resizeCanvas, 100));
 
-console.log('✅ DDoS Ниндзя готова! Цветные роботы, взлетают на 380-480px, режутся при наведении');
+console.log('DDoS Ниндзя готова! Цветные роботы, взлетают на 380-480px, режутся при наведении');
