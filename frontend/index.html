@@ -21,6 +21,8 @@
         </div>
         
         <!-- Шапка с аккаунтом - теперь на ВСЕХ страницах после регистрации -->
+         <div v-else-if="!gameActive && !gameEnded && !showAdminPanel && !showTournament" class="game-menu">
+         </div>
         <div class="account-header" v-if="registered">
             <div class="account-info" @click="showAccountModal = true">
                 <div class="avatar">{{ user.firstName ? user.firstName.charAt(0) : '?' }}{{ user.lastName ? user.lastName.charAt(0) : '?' }}</div>
@@ -128,14 +130,19 @@
                     Админ-панель
                 </button>
                 
+                <!-- Новая кнопка отключения уведомлений -->
+                <button class="btn-notifications" :class="notificationsButtonClass" @click="toggleNotifications">
+                    {{ notificationsButtonText }}
+                </button>
+                
                 <div v-if="showRules" class="rules">
                     <h3>Правила игры</h3>
-                    <p> Водите мышкой/пальцем по экрану — разрезайте роботов</p>
-                    <p> За каждого уничтоженного робота +10 очков</p>
-                    <p> Пропущенный робот = -1 жизнь</p>
-                    <p> У вас 15 жизней</p>
+                    <p>⚔️ Водите мышкой/пальцем по экрану — разрезайте роботов</p>
+                    <p>🤖 За каждого уничтоженного робота +10 очков</p>
+                    <p>💔 Пропущенный робот = -1 жизнь</p>
+                    <p>❤️ У вас 15 жизней</p>
                     <p>⏱ Время игры: 90 секунд</p>
-                    <p> Победа: 250+ очков</p>
+                    <p>🏆 Победа: 250+ очков</p>
                 </div>
             </div>
         </div>
@@ -239,7 +246,9 @@
                 <h2>Админ-панель</h2>
                 <button class="btn-close-admin" @click="showAdminPanel = false">Закрыть</button>
             </div>
-            
+            <button class="btn-notifications" :class="notificationsButtonClass" @click="toggleNotifications">
+            {{ notificationsButtonText }}
+            </button>
             <div class="tournament-stats">
                 <div class="stat-card">
                     <h3>Всего игроков</h3>

@@ -8,6 +8,7 @@ new Vue({
         showAccountModal: false,
         showAdminPanel: false,
         showTournament: false,
+        notificationsEnabled: true, // Новая переменная для состояния уведомлений
         user: {
             firstName: '',
             lastName: '',
@@ -67,6 +68,12 @@ new Vue({
         },
         resultStatusClass() {
             return this.resultStatus === 'ПОБЕДА' ? 'status-win' : 'status-lose';
+        },
+        notificationsButtonText() {
+            return this.notificationsEnabled ? '🔔 Отключить уведомления' : '🔕 Включить уведомления';
+        },
+        notificationsButtonClass() {
+            return this.notificationsEnabled ? 'btn-notifications on' : 'btn-notifications';
         }
     },
     
@@ -88,42 +95,56 @@ new Vue({
         },
         
         logout() {
-    if (confirm('Вы уверены, что хотите выйти? Ваша статистика сохранится.')) {
-        this.showAccountModal = false;
+            if (confirm('Вы уверены, что хотите выйти? Ваша статистика сохранится.')) {
+                this.showAccountModal = false;
+                
+                if (this.gameActive || this.currentGame) {
+                    this.stopGame();
+                    this.gameActive = false;
+                    this.gameEnded = false;
+                }
+                
+                this.registered = false;
+                this.gameActive = false;
+                this.gameEnded = false;
+                this.showAdminPanel = false;
+                this.showTournament = false;
+                this.score = 0;
+                this.lives = 15;
+                this.gameTime = 90;
+                this.gameStatus = '';
+                
+                this.user = {
+                    firstName: '',
+                    lastName: '',
+                    phone: '',
+                    consent: false
+                };
+                
+                this.stopFactNotifications();
+                
+                console.log('Выход из аккаунта выполнен');
+            }
+        },
         
-        // Если игра активна, останавливаем её
-        if (this.gameActive || this.currentGame) {
-            this.stopGame();
-            this.gameActive = false;
-            this.gameEnded = false;
-        }
-        
-        this.registered = false;
-        this.gameActive = false;
-        this.gameEnded = false;
-        this.showAdminPanel = false;
-        this.showTournament = false;
-        this.score = 0;
-        this.lives = 15;
-        this.gameTime = 90;
-        this.gameStatus = '';
-        
-        this.user = {
-            firstName: '',
-            lastName: '',
-            phone: '',
-            consent: false
-        };
-        
-        // Останавливаем уведомления
-        this.stopFactNotifications();
-        
-        console.log('Выход из аккаунта выполнен');
-        
-        // Перезагружаем страницу, чтобы сбросить состояние
-        // Или просто показываем форму регистрации
-    }
-},
+        // Метод для переключения уведомлений
+        toggleNotifications() {
+            this.notificationsEnabled = !this.notificationsEnabled;
+            localStorage.setItem('ddosNotificationsEnabled', this.notificationsEnabled);
+            
+            if (this.notificationsEnabled) {
+                // Если включили уведомления и игра не активна - запускаем
+                if (!this.gameActive && !this.gameEnded && this.registered) {
+                    this.startFactNotifications();
+                }
+            } else {
+                // Если выключили - останавливаем всё
+                this.stopFactNotifications();
+                this.closeBigPhoto();
+            }
+            
+            console.log('Уведомления:', this.notificationsEnabled ? 'включены' : 'отключены');
+        },
         
         telegramAuth() {
             alert('Telegram авторизация скоро появится');
@@ -137,6 +158,12 @@ new Vue({
             if (savedTotalKills) this.totalKills = parseInt(savedTotalKills);
             
             this.loadTournament();
+            
+            // Загружаем состояние уведомлений
+            const savedNotifications = localStorage.getItem('ddosNotificationsEnabled');
+            if (savedNotifications !== null) {
+                this.notificationsEnabled = savedNotifications === 'true';
+            }
         },
         
         saveStats(score, kills) {
@@ -245,7 +272,6 @@ new Vue({
             document.body.removeChild(link);
         },
         
-        // ========== ЗАПУСК ИГРЫ ==========
         startGame() {
             console.log('startGame вызван');
             this.gameActive = true;
@@ -255,7 +281,6 @@ new Vue({
             this.gameTime = 90;
             this.gameStatus = '';
             
-            // Останавливаем уведомления во время игры
             this.stopFactNotifications();
             
             this.$nextTick(() => {
@@ -267,7 +292,6 @@ new Vue({
                     return;
                 }
                 
-                // Принудительно обновляем размеры canvas
                 setTimeout(() => {
                     if (typeof window.updateCanvasSize === 'function') {
                         window.updateCanvasSize();
@@ -325,9 +349,8 @@ new Vue({
             this.saveToTournament(score, kills);
             this.stopGame();
             
-            // Возобновляем уведомления после завершения игры
             setTimeout(() => {
-                if (!this.gameActive) {
+                if (!this.gameActive && this.notificationsEnabled) {
                     this.startFactNotifications();
                 }
             }, 1000);
@@ -351,9 +374,10 @@ new Vue({
             this.showRules = false;
             this.showAccountModal = false;
             
-            // Возобновляем уведомления при возврате в меню
             setTimeout(() => {
-                this.startFactNotifications();
+                if (this.notificationsEnabled) {
+                    this.startFactNotifications();
+                }
             }, 500);
         },
         
@@ -364,9 +388,10 @@ new Vue({
             this.gameEnded = false;
             this.gameStatus = '';
             
-            // Возобновляем уведомления при выходе из игры
             setTimeout(() => {
-                this.startFactNotifications();
+                if (this.notificationsEnabled) {
+                    this.startFactNotifications();
+                }
             }, 500);
         },
         
@@ -396,6 +421,12 @@ new Vue({
         },
         
         showBigPhoto() {
+            // Проверяем, включены ли уведомления
+            if (!this.notificationsEnabled) {
+                console.log('Уведомления отключены, показ фото пропущен');
+                return;
+            }
+            
             const photoSlide = document.getElementById('bigPhotoSlide');
             if (!photoSlide) return;
             
@@ -449,31 +480,32 @@ new Vue({
             this.closeBigPhoto();
         },
         
-        // ========== УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ ==========
         startFactNotifications() {
             console.log('startFactNotifications вызван');
             
-            // Очищаем существующие интервалы
+            // Проверяем, включены ли уведомления
+            if (!this.notificationsEnabled) {
+                console.log('Уведомления отключены, запуск пропущен');
+                return;
+            }
+            
             if (this.factInterval) {
                 clearInterval(this.factInterval);
                 this.factInterval = null;
             }
             
-            // Запускаем первое уведомление через 5 секунд
             setTimeout(() => {
-                // Проверяем, активна ли игра
-                if (!this.gameActive && !this.gameEnded) {
+                if (!this.gameActive && !this.gameEnded && this.notificationsEnabled) {
                     this.showBigPhoto();
                 }
             }, 5000);
             
-            // Запускаем интервал каждые 15 секунд
             this.factInterval = setInterval(() => {
-                // Проверяем, активна ли игра
-                if (!this.gameActive && !this.gameEnded) {
+                if (!this.gameActive && !this.gameEnded && this.notificationsEnabled) {
                     this.showBigPhoto();
-                } else {
-                    console.log('Уведомление пропущено - игра активна');
+                } else if (!this.notificationsEnabled) {
+                    console.log('Уведомления отключены, интервал остановлен');
+                    this.stopFactNotifications();
                 }
             }, 15000);
         },
@@ -483,6 +515,10 @@ new Vue({
             if (this.factInterval) {
                 clearInterval(this.factInterval);
                 this.factInterval = null;
+            }
+            if (this.factTimeout) {
+                clearTimeout(this.factTimeout);
+                this.factTimeout = null;
             }
             this.closeBigPhoto();
         }
@@ -504,8 +540,16 @@ new Vue({
         
         this.loadTournament();
         
-        // Запускаем уведомления только если игра не активна
-        if (!this.gameActive && !this.gameEnded) {
+        // Загружаем состояние уведомлений
+        const savedNotifications = localStorage.getItem('ddosNotificationsEnabled');
+        if (savedNotifications !== null) {
+            this.notificationsEnabled = savedNotifications === 'true';
+        } else {
+            this.notificationsEnabled = true;
+            localStorage.setItem('ddosNotificationsEnabled', 'true');
+        }
+        
+        if (this.notificationsEnabled && !this.gameActive && !this.gameEnded && this.registered) {
             this.startFactNotifications();
         }
     },

@@ -85,7 +85,7 @@ body {
     100% { transform: translate(0, 0) scale(1); opacity: 0.3; }
 }
 
-/* Логотип в левом верхнем углу */
+/* Логотип в левом верхнем углу - УВЕЛИЧЕН */
 .app-logo {
     position: fixed;
     top: 15px;
@@ -94,8 +94,8 @@ body {
 }
 
 .app-logo .logo-img {
-    width: 120px;
-    height: 120px;
+    width: 160px;
+    height: 160px;
     display: block;
 }
 
@@ -119,7 +119,6 @@ body {
     cursor: pointer;
     transition: all 0.3s;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-    margin-top: 30px;
 }
 
 .account-info:hover {
@@ -409,6 +408,31 @@ body {
 .btn-rules:hover, .btn-back:hover {
     background: rgba(107, 78, 255, 0.1);
     transform: translateY(-2px);
+}
+
+/* Новая кнопка отключения уведомлений */
+.btn-notifications {
+    width: 100%;
+    padding: 12px;
+    background: rgba(107, 78, 255, 0.2);
+    border: 1px solid #6b4eff;
+    color: #b89aff;
+    border-radius: 50px;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.btn-notifications:hover {
+    background: rgba(107, 78, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.btn-notifications.on {
+    border-color: #ff6b4e;
+    color: #ff6b4e;
+    background: rgba(255, 107, 78, 0.1);
 }
 
 .btn-telegram {
@@ -889,7 +913,7 @@ body {
     transform: scale(1.1);
 }
 
-/* Адаптация */
+/* Адаптация для десктопа */
 @media (min-width: 1600px) {
     .game-container {
         width: 90vw;
@@ -907,6 +931,7 @@ body {
     }
 }
 
+/* Адаптация для мобильных устройств */
 @media (max-width: 768px) {
     .app-logo {
         top: 8px;
@@ -914,8 +939,8 @@ body {
     }
     
     .app-logo .logo-img {
-        width: 80px;
-        height: 80px;
+        width: 100px;
+        height: 100px;
     }
     
     .account-header {
@@ -924,7 +949,7 @@ body {
     }
     
     .account-info {
-        margin-top: 12px;
+        margin-top: 0;
         padding: 6px 12px;
     }
     
@@ -936,6 +961,14 @@ body {
     
     .account-name {
         font-size: 11px;
+    }
+    
+    .account-status {
+        font-size: 9px;
+    }
+    
+    .account-arrow {
+        font-size: 10px;
     }
     
     .game-container {
@@ -990,76 +1023,7 @@ body {
     .big-photo-slide.left-side.show {
         left: 10px;
     }
-}
-.cyber-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1;
-    pointer-events: none;
-}
-
-.hex-grid {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 2;
-    pointer-events: none;
-    opacity: 0.4;
-}
-
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-
-/* Адаптация для мобильных устройств */
-@media (max-width: 768px) {
-    body {
-        padding: 10px;
-        overflow-x: hidden;
-        touch-action: manipulation; /* Улучшает касания */
-    }
     
-    /* Логотип на мобильных */
-    .app-logo {
-        top: 8px;
-        left: 10px;
-    }
-    
-    .app-logo .logo-img {
-        width: 60px;
-        height: 60px;
-    }
-    
-    /* Шапка аккаунта на мобильных */
-    .account-header {
-        top: 8px;
-        right: 10px;
-    }
-    
-    .account-info {
-        margin-top: 5px;
-        padding: 6px 12px;
-        gap: 8px;
-    }
-    
-    .avatar {
-        width: 28px;
-        height: 28px;
-        font-size: 14px;
-    }
-    
-    .account-name {
-        font-size: 11px;
-    }
-    
-    .account-status {
-        font-size: 9px;
-    }
-    
-    /* Контейнеры */
     .registration-container, .game-menu {
         padding: 20px;
         max-width: 95%;
@@ -1074,18 +1038,16 @@ body {
         font-size: 14px;
     }
     
-    /* Кнопки */
     .btn-play {
         font-size: 20px;
         padding: 12px;
     }
     
-    .btn-primary, .btn-rules, .btn-tournament, .btn-admin {
+    .btn-primary, .btn-rules, .btn-tournament, .btn-admin, .btn-notifications {
         font-size: 14px;
         padding: 10px;
     }
     
-    /* Статистика */
     .stats, .tournament-stats, .result-stats {
         gap: 10px;
         margin: 20px 0;
@@ -1103,47 +1065,6 @@ body {
         font-size: 11px;
     }
     
-    /* Игровое поле */
-    .game-container {
-        width: 98vw;
-        height: 92vh;
-        padding: 10px;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-    }
-    
-    .game-info {
-        padding: 8px 12px;
-        gap: 8px;
-        margin-bottom: 10px;
-    }
-    
-    .game-info span {
-        font-size: 12px;
-    }
-    
-    .game-info span strong {
-        font-size: 16px;
-    }
-    
-    .game-status {
-        font-size: 12px;
-        padding: 3px 10px;
-    }
-    
-    #gameCanvas {
-        min-height: 250px;
-        touch-action: none; /* Улучшает сенсорное управление */
-    }
-    
-    .btn-exit {
-        padding: 8px 16px;
-        font-size: 14px;
-        margin-top: 10px;
-    }
-    
-    /* Турнирная таблица */
     .tournament-container {
         padding: 15px;
         width: 98%;
@@ -1180,38 +1101,6 @@ body {
         font-size: 14px;
     }
     
-    /* Большие фото на мобильных */
-    .big-photo-content {
-        width: 280px;
-        padding: 12px;
-    }
-    
-    .big-photo-image {
-        width: 240px;
-        height: 240px;
-    }
-    
-    .big-photo-text p {
-        font-size: 12px;
-    }
-    
-    .big-photo-close {
-        width: 28px;
-        height: 28px;
-        font-size: 18px;
-        top: 8px;
-        right: 12px;
-    }
-    
-    .big-photo-slide.right-side.show {
-        right: 5px;
-    }
-    
-    .big-photo-slide.left-side.show {
-        left: 5px;
-    }
-    
-    /* Модальное окно */
     .modal-content {
         width: 95%;
         max-width: 350px;
@@ -1235,8 +1124,8 @@ body {
 /* Для очень маленьких экранов */
 @media (max-width: 480px) {
     .app-logo .logo-img {
-        width: 50px;
-        height: 50px;
+        width: 80px;
+        height: 80px;
     }
     
     .game-info span {
@@ -1269,100 +1158,30 @@ body {
         touch-action: manipulation;
     }
     
-    /* Улучшение скролла на мобильных */
     .tournament-container {
         -webkit-overflow-scrolling: touch;
     }
 }
 
-/* Шапка с аккаунтом - всегда видна */
-.account-header {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 1000;
+.cyber-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
 }
 
-.account-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(15, 12, 31, 0.85);
-    backdrop-filter: blur(12px);
-    padding: 10px 18px;
-    border-radius: 50px;
-    border: 1px solid rgba(107, 78, 255, 0.5);
-    cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+.hex-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0.4;
 }
 
-.account-info:hover {
-    transform: translateY(-2px);
-    border-color: #ff6b4e;
-}
-
-.avatar {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #6b4eff, #9b7bff);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: bold;
-    color: white;
-}
-
-.account-details {
-    display: flex;
-    flex-direction: column;
-}
-
-.account-name {
-    font-weight: bold;
-    color: white;
-    font-size: 14px;
-}
-
-.account-status {
-    font-size: 11px;
-    color: #6b4eff;
-}
-
-.account-arrow {
-    color: #ff6b4e;
-    font-size: 12px;
-}
-
-/* Адаптация для мобильных */
-@media (max-width: 768px) {
-    .account-header {
-        top: 12px;
-        right: 12px;
-    }
-    
-    .account-info {
-        padding: 6px 12px;
-        gap: 8px;
-    }
-    
-    .avatar {
-        width: 32px;
-        height: 32px;
-        font-size: 16px;
-    }
-    
-    .account-name {
-        font-size: 11px;
-    }
-    
-    .account-status {
-        font-size: 9px;
-    }
-    
-    .account-arrow {
-        font-size: 10px;
-    }
-}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
