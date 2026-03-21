@@ -22,15 +22,16 @@ const authenticateToken = (req, res, next) => {
 
 // Регистрация
 app.post('/api/auth/register', async (req, res) => {
-  const { firstName, lastName, phone, password } = req.body;
+  const { firstName, lastName, phone, password, telegramId, telegramUsername, agreedToTerms } = req.body;
   if (!firstName || !lastName || !phone || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
+    return res.status(400).json({ error: 'All required fields: firstName, lastName, phone, password' });
   }
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (first_name, last_name, phone, password_hash) VALUES ($1, $2, $3, $4) RETURNING id',
-      [firstName, lastName, phone, hashedPassword]
+      `INSERT INTO users (first_name, last_name, phone, password_hash, telegram_id, telegram_username, agreed_to_terms)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [firstName, lastName, phone, hashedPassword, telegramId || null, telegramUsername || null, agreedToTerms || false]
     );
     const userId = result.rows[0].id;
     await pool.query(
@@ -40,7 +41,12 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({ userId, message: 'User registered' });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(409).json({ error: 'Phone already exists' });
+      if (err.constraint === 'users_phone_key') {
+        return res.status(409).json({ error: 'Phone already exists' });
+      }
+      if (err.constraint === 'users_telegram_id_key') {
+        return res.status(409).json({ error: 'Telegram ID already linked to another account' });
+      }
     }
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
@@ -111,7 +117,6 @@ app.post('/api/game/result', authenticateToken, async (req, res) => {
 
 // Турнирная таблица (топ-100)
 app.get('/api/leaderboard', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 100, 100);
   try {
     const result = await pool.query(
       `SELECT ROW_NUMBER() OVER (ORDER BY l.score DESC) AS rank,
@@ -124,8 +129,7 @@ app.get('/api/leaderboard', async (req, res) => {
        FROM leaderboard l
        JOIN users u ON l.user_id = u.id
        ORDER BY l.score DESC
-       LIMIT $1`,
-      [limit]
+       LIMIT 10`
     );
     res.json(result.rows);
   } catch (err) {
@@ -146,6 +150,30 @@ app.get('/api/player/stats', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Stats not found' });
     }
     res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Привязка Telegram ID к существующему аккаунту (требуется авторизация)
+app.post('/api/auth/link-telegram', authenticateToken, async (req, res) => {
+  const { telegramId, telegramUsername } = req.body;
+  const userId = req.user.userId;
+  if (!telegramId) {
+    return res.status(400).json({ error: 'telegramId is required' });
+  }
+  try {
+    // Проверяем, не занят ли этот Telegram ID другим пользователем
+    const existing = await pool.query('SELECT id FROM users WHERE telegram_id = $1 AND id != $2', [telegramId, userId]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Telegram ID already linked to another account' });
+    }
+    await pool.query(
+      'UPDATE users SET telegram_id = $1, telegram_username = $2 WHERE id = $3',
+      [telegramId, telegramUsername || null, userId]
+    );
+    res.json({ message: 'Telegram account linked successfully' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
