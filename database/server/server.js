@@ -61,7 +61,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
   try {
     const result = await pool.query(
-      'SELECT id, first_name, last_name, password_hash FROM users WHERE phone = $1',
+      'SELECT id, first_name, last_name, password_hash, role FROM users WHERE phone = $1',
       [phone]
     );
     if (result.rows.length === 0) {
@@ -74,7 +74,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
     const token = jwt.sign({ userId: user.id, phone }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, userId: user.id, firstName: user.first_name, lastName: user.last_name });
+    res.json({ token, userId: user.id, firstName: user.first_name, lastName: user.last_name, role: user.role });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
