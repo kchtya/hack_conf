@@ -70,7 +70,7 @@ new Vue({
             return this.resultStatus === 'ПОБЕДА' ? 'status-win' : 'status-lose';
         },
         notificationsButtonText() {
-            return this.notificationsEnabled ? '🔔 Отключить уведомления' : '🔕 Включить уведомления';
+            return this.notificationsEnabled ? 'Отключить уведомления' : 'Включить уведомления';
         },
         notificationsButtonClass() {
             return this.notificationsEnabled ? 'btn-notifications on' : 'btn-notifications';
@@ -147,7 +147,130 @@ new Vue({
         },
         
         telegramAuth() {
-            alert('Telegram авторизация скоро появится');
+            // проверка есть ли уже токен
+            const token = localStorage.getItem('telegramToken');
+            if (token && this.registered) {
+                console.log('Уже авторизован');
+                return;
+            }
+            
+            // создание модального окна
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.85);
+                backdrop-filter: blur(8px);
+                z-index: 10000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+            
+            const container = document.createElement('div');
+            container.style.cssText = `
+                background: linear-gradient(135deg, #1a1a2e, #0f0f1a);
+                border-radius: 25px;
+                padding: 35px;
+                border: 1px solid #6b4eff;
+                text-align: center;
+                min-width: 320px;
+            `;
+    
+            container.innerHTML = `
+                <h3 style="color: #ffaa66; margin-bottom: 15px;">Вход через Telegram</h3>
+                <p style="color: #b89aff; margin-bottom: 25px; font-size: 14px;">
+                Нажмите кнопку ниже для авторизации
+                </p>
+                <div id="telegram-login-widget" style="display: flex; justify-content: center; margin-bottom: 20px;"></div>
+                <button id="close-telegram-modal" style="
+                    margin-top: 15px;
+                    padding: 8px 25px;
+                    background: transparent;
+                    border: 1px solid #ff6b4e;
+                    color: #ff6b4e;
+                   border-radius: 25px;
+                    cursor: pointer;
+                font-size: 14px;
+                ">Отмена</button>
+           `;
+    
+            modal.appendChild(container);
+            document.body.appendChild(modal);
+    
+            // обработчик успешной авторизации
+            window.onTelegramAuth = async (telegramUser) => {
+                try {
+                    // отправка данных на бэкенд
+                    const response = await fetch('http://localhost:3000/api/telegram-auth', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(telegramUser)
+                    });
+            
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        // сохранение токена и данных пользователя
+                        localStorage.setItem('telegramToken', result.token);
+                        localStorage.setItem('telegramUser', JSON.stringify(result.user));
+                        
+                        // заполнение формы регистрации
+                        this.user.firstName = result.user.firstName;
+                        this.user.lastName = result.user.lastName;
+                        this.user.phone = result.user.phone || '';
+                        this.user.consent = true;
+                
+                        // регистрация
+                        this.register();
+                
+                        // закрытие модалки
+                        modal.remove();
+                    } else {
+                        alert('Ошибка авторизации: ' + (result.error || 'Неизвестная ошибка'));
+                    }
+                } catch (error) {
+                    console.error('Telegram auth error:', error);
+                    alert('Ошибка подключения к серверу. Проверьте, запущен ли бэкенд.');
+                }
+        
+                delete window.onTelegramAuth;
+            };
+    
+            // загрузка telegram виджета
+            const script = document.createElement('script');
+            script.src = 'https://telegram.org/js/telegram-widget.js?22';
+            script.setAttribute('data-telegram-login', 'ddsgrd_bot'); // !!!!!!!!!!!!!!!!!!!!!!!
+            script.setAttribute('data-size', 'large');
+            script.setAttribute('data-request-access', 'write');
+            script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+            script.async = true;
+    
+            const widgetContainer = document.getElementById('telegram-login-widget');
+            if (widgetContainer) {
+                widgetContainer.appendChild(script);
+            }
+    
+            // закрытие модалки
+            const closeBtn = document.getElementById('close-telegram-modal');
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    modal.remove();
+                    delete window.onTelegramAuth;
+                };
+            }
+    
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    delete window.onTelegramAuth;
+                }
+            };
         },
         
         loadStats() {
