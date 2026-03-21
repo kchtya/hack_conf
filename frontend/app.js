@@ -421,14 +421,32 @@ new Vue({
         },
         
         showBigPhoto() {
-            // Проверяем, включены ли уведомления
+            // Проверка: если пользователь не зарегистрирован - НИКАКИХ уведомлений
+            if (!this.registered) {
+                console.log('Пользователь не зарегистрирован, уведомления скрыты');
+                return;
+            }
+            
+            // Проверка: если уведомления отключены - НЕ показываем
             if (!this.notificationsEnabled) {
                 console.log('Уведомления отключены, показ фото пропущен');
                 return;
             }
             
+            // Проверка: если игра активна - НЕ показываем
+            if (this.gameActive || this.gameEnded) {
+                console.log('Игра активна, уведомления скрыты');
+                return;
+            }
+            
             const photoSlide = document.getElementById('bigPhotoSlide');
             if (!photoSlide) return;
+            
+            // Очищаем предыдущие таймауты
+            if (this.factTimeout) {
+                clearTimeout(this.factTimeout);
+                this.factTimeout = null;
+            }
             
             const randomFact = ddosFacts[Math.floor(Math.random() * ddosFacts.length)];
             const bigImage = document.getElementById('bigPhotoImage');
@@ -441,7 +459,11 @@ new Vue({
             
             const isLeft = Math.random() > 0.5;
             
+            // Сначала скрываем, потом показываем
             photoSlide.classList.remove('right-side', 'left-side', 'show');
+            
+            // Форсируем скрытие перед показом
+            photoSlide.style.display = 'block';
             
             if (isLeft) {
                 photoSlide.classList.add('left-side');
@@ -449,11 +471,12 @@ new Vue({
                 photoSlide.classList.add('right-side');
             }
             
+            // Небольшая задержка для плавного появления
             setTimeout(() => {
                 photoSlide.classList.add('show');
             }, 50);
             
-            if (this.factTimeout) clearTimeout(this.factTimeout);
+            // Авто-закрытие через 7 секунд
             this.factTimeout = setTimeout(() => {
                 this.closeBigPhoto();
             }, 7000);
@@ -463,7 +486,11 @@ new Vue({
             const photoSlide = document.getElementById('bigPhotoSlide');
             if (photoSlide) {
                 photoSlide.classList.remove('show');
+                // Скрываем после анимации
                 setTimeout(() => {
+                    if (photoSlide && !photoSlide.classList.contains('show')) {
+                        photoSlide.style.display = 'none';
+                    }
                     const bigImage = document.getElementById('bigPhotoImage');
                     const bigText = document.getElementById('bigPhotoText');
                     if (bigImage) bigImage.src = '';
@@ -483,28 +510,46 @@ new Vue({
         startFactNotifications() {
             console.log('startFactNotifications вызван');
             
-            // Проверяем, включены ли уведомления
+            // ВАЖНО: проверяем, зарегистрирован ли пользователь
+            if (!this.registered) {
+                console.log('Пользователь не зарегистрирован, уведомления не запускаются');
+                return;
+            }
+            
             if (!this.notificationsEnabled) {
                 console.log('Уведомления отключены, запуск пропущен');
                 return;
             }
             
+            if (this.gameActive || this.gameEnded) {
+                console.log('Игра активна, уведомления не запускаются');
+                return;
+            }
+            
+            // Очищаем существующие интервалы
             if (this.factInterval) {
                 clearInterval(this.factInterval);
                 this.factInterval = null;
             }
             
-            setTimeout(() => {
-                if (!this.gameActive && !this.gameEnded && this.notificationsEnabled) {
+            if (this.factTimeout) {
+                clearTimeout(this.factTimeout);
+                this.factTimeout = null;
+            }
+            
+            // Запускаем первое уведомление через 5 секунд
+            this.factTimeout = setTimeout(() => {
+                if (this.registered && this.notificationsEnabled && !this.gameActive && !this.gameEnded) {
                     this.showBigPhoto();
                 }
             }, 5000);
             
+            // Запускаем интервал каждые 15 секунд
             this.factInterval = setInterval(() => {
-                if (!this.gameActive && !this.gameEnded && this.notificationsEnabled) {
+                if (this.registered && this.notificationsEnabled && !this.gameActive && !this.gameEnded) {
                     this.showBigPhoto();
-                } else if (!this.notificationsEnabled) {
-                    console.log('Уведомления отключены, интервал остановлен');
+                } else if (!this.registered) {
+                    console.log('Пользователь не зарегистрирован, уведомления остановлены');
                     this.stopFactNotifications();
                 }
             }, 15000);
