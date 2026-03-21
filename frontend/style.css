@@ -1339,3 +1339,8 @@ body {
 .hide-during-game {
     display: none !important;
 }
+
+/* Скрываем необработанные шаблоны Vue */
+[v-cloak] {
+    display: none !important;
+}

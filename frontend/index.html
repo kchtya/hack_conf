@@ -7,6 +7,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>DDoS-Ниндзя | Robot Slayer</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Скрываем необработанные шаблоны Vue до инициализации -->
+    <style>
+        [v-cloak] {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
     <!-- Кибер-фон - на самом нижнем слое -->
@@ -15,8 +21,8 @@
         <div class="hex-grid"></div>
     </div>
     
-    <!-- Основное содержимое - поверх фона -->
-    <div id="app">
+    <!-- Основное содержимое - поверх фона, v-cloak скрывает до инициализации Vue -->
+    <div id="app" v-cloak>
         <!-- Логотип - скрывается во время игры, в турнирной таблице и админ-панели -->
         <div class="app-logo" :class="{ 'hide-during-game': gameActive || showTournament || showAdminPanel }" @click="backToMenu">
             <img src="pictures/Logo_basic_inversion_mono.svg" alt="DDoS-Ниндзя" class="logo-img">
