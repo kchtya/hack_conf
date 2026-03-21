@@ -8,11 +8,22 @@ new Vue({
         showAccountModal: false,
         showAdminPanel: false,
         showTournament: false,
-        notificationsEnabled: true, // Новая переменная для состояния уведомлений
+        notificationsEnabled: true,
+        authMode: 'register',
+        isAdmin: false,
+        adminCredentials: {
+            phone: '+7 (999) 123-45-67',
+            password: 'admin2026'
+        },
+        loginData: {
+            phone: '',
+            password: ''
+        },
         user: {
             firstName: '',
             lastName: '',
             phone: '',
+            password: '',
             consent: false
         },
         highScore: 0,
@@ -78,20 +89,126 @@ new Vue({
     },
     
     methods: {
+        // Метод для проверки номера телефона
+        validatePhone(phone) {
+            // Удаляем все пробелы, скобки, тире и плюс
+            const cleanPhone = phone.replace(/[\s\(\)\-]/g, '');
+            
+            // Проверка для российских номеров: +7XXXXXXXXXX или 8XXXXXXXXXX или 7XXXXXXXXXX
+            const phonePattern = /^(\+7|7|8)?\d{10}$/;
+            
+            if (!phonePattern.test(cleanPhone)) {
+                return false;
+            }
+            
+            // Проверяем длину: должно быть 10 или 11 цифр
+            const digitsOnly = cleanPhone.replace(/[^\d]/g, '');
+            return digitsOnly.length === 10 || digitsOnly.length === 11;
+        },
+        
+        // Форматирование номера телефона для отображения
+        formatPhone(phone) {
+            const clean = phone.replace(/[^\d]/g, '');
+            if (clean.length === 11) {
+                return `+${clean[0]} (${clean.slice(1, 4)}) ${clean.slice(4, 7)}-${clean.slice(7, 9)}-${clean.slice(9, 11)}`;
+            } else if (clean.length === 10) {
+                return `+7 (${clean.slice(0, 3)}) ${clean.slice(3, 6)}-${clean.slice(6, 8)}-${clean.slice(8, 10)}`;
+            }
+            return phone;
+        },
+        
         register() {
-            if (!this.user.firstName || !this.user.lastName || !this.user.phone || !this.user.consent) {
+            if (!this.user.firstName || !this.user.lastName || !this.user.phone || !this.user.password || !this.user.consent) {
                 alert('Пожалуйста, заполните все обязательные поля');
                 return;
+            }
+            
+            // Проверка номера телефона
+            if (!this.validatePhone(this.user.phone)) {
+                alert('Пожалуйста, введите корректный номер телефона в формате: +7 (XXX) XXX-XX-XX');
+                return;
+            }
+            
+            if (this.user.password.length < 6) {
+                alert('Пароль должен содержать минимум 6 символов');
+                return;
+            }
+            
+            // Форматируем номер телефона
+            this.user.phone = this.formatPhone(this.user.phone);
+            
+            // Проверка на занятость телефона
+            const existingUser = localStorage.getItem('ddosUser');
+            if (existingUser) {
+                const userData = JSON.parse(existingUser);
+                if (userData.phone === this.user.phone) {
+                    alert('Пользователь с таким телефоном уже зарегистрирован');
+                    return;
+                }
             }
             
             localStorage.setItem('ddosUser', JSON.stringify({
                 firstName: this.user.firstName,
                 lastName: this.user.lastName,
-                phone: this.user.phone
+                phone: this.user.phone,
+                password: this.user.password
             }));
+            
             this.loadStats();
             this.registered = true;
             console.log('Регистрация успешна');
+        },
+        
+        login() {
+            if (!this.loginData.phone || !this.loginData.password) {
+                alert('Введите телефон и пароль');
+                return;
+            }
+            
+            // Проверка номера телефона
+            if (!this.validatePhone(this.loginData.phone)) {
+                alert('Пожалуйста, введите корректный номер телефона в формате: +7 (XXX) XXX-XX-XX');
+                return;
+            }
+            
+            // Форматируем номер телефона для поиска
+            const formattedPhone = this.formatPhone(this.loginData.phone);
+            
+            // Проверка на администратора
+            if (formattedPhone === this.adminCredentials.phone && 
+                this.loginData.password === this.adminCredentials.password) {
+                this.isAdmin = true;
+                this.user = {
+                    firstName: 'Admin',
+                    lastName: 'System',
+                    phone: formattedPhone,
+                    password: this.loginData.password,
+                    consent: true
+                };
+                this.registered = true;
+                this.loadStats();
+                console.log('Вход администратора выполнен');
+                this.loginData = { phone: '', password: '' };
+                return;
+            }
+            
+            // Проверка обычного пользователя
+            const savedUser = localStorage.getItem('ddosUser');
+            if (savedUser) {
+                const userData = JSON.parse(savedUser);
+                if (userData.phone === formattedPhone && userData.password === this.loginData.password) {
+                    this.user = userData;
+                    this.registered = true;
+                    this.loadStats();
+                    console.log('Вход выполнен успешно');
+                } else {
+                    alert('Неверный телефон или пароль');
+                }
+            } else {
+                alert('Пользователь не найден. Зарегистрируйтесь сначала');
+            }
+            
+            this.loginData = { phone: '', password: '' };
         },
         
         logout() {
@@ -109,6 +226,7 @@ new Vue({
                 this.gameEnded = false;
                 this.showAdminPanel = false;
                 this.showTournament = false;
+                this.isAdmin = false;
                 this.score = 0;
                 this.lives = 15;
                 this.gameTime = 90;
@@ -118,8 +236,12 @@ new Vue({
                     firstName: '',
                     lastName: '',
                     phone: '',
+                    password: '',
                     consent: false
                 };
+                
+                this.loginData = { phone: '', password: '' };
+                this.authMode = 'register';
                 
                 this.stopFactNotifications();
                 
@@ -127,27 +249,43 @@ new Vue({
             }
         },
         
-        // Метод для переключения уведомлений
+        logoutAdmin() {
+            this.isAdmin = false;
+            this.showAdminPanel = false;
+            alert('Вы вышли из админ-панели');
+        },
+        
+        closeAdminPanel() {
+            this.showAdminPanel = false;
+        },
+        
+        openAdminPanel() {
+            if (this.isAdmin) {
+                this.loadTournament();
+                this.showAdminPanel = true;
+                this.showTournament = false;
+                if (this.gameActive) this.exitGame();
+            }
+        },
+        
+        telegramAuth() {
+            alert('Telegram авторизация скоро появится');
+        },
+        
         toggleNotifications() {
             this.notificationsEnabled = !this.notificationsEnabled;
             localStorage.setItem('ddosNotificationsEnabled', this.notificationsEnabled);
             
             if (this.notificationsEnabled) {
-                // Если включили уведомления и игра не активна - запускаем
                 if (!this.gameActive && !this.gameEnded && this.registered) {
                     this.startFactNotifications();
                 }
             } else {
-                // Если выключили - останавливаем всё
                 this.stopFactNotifications();
                 this.closeBigPhoto();
             }
             
             console.log('Уведомления:', this.notificationsEnabled ? 'включены' : 'отключены');
-        },
-        
-        telegramAuth() {
-            alert('Telegram авторизация скоро появится');
         },
         
         loadStats() {
@@ -159,7 +297,6 @@ new Vue({
             
             this.loadTournament();
             
-            // Загружаем состояние уведомлений
             const savedNotifications = localStorage.getItem('ddosNotificationsEnabled');
             if (savedNotifications !== null) {
                 this.notificationsEnabled = savedNotifications === 'true';
@@ -206,18 +343,6 @@ new Vue({
             this.showTournament = true;
             this.showAdminPanel = false;
             if (this.gameActive) this.exitGame();
-        },
-        
-        openAdminPanel() {
-            const pwd = prompt('Введите пароль администратора:');
-            if (pwd === 'admin2026') {
-                this.loadTournament();
-                this.showAdminPanel = true;
-                this.showTournament = false;
-                if (this.gameActive) this.exitGame();
-            } else if (pwd) {
-                alert('Неверный пароль');
-            }
         },
         
         isCurrentPlayer(player) {
@@ -350,7 +475,7 @@ new Vue({
             this.stopGame();
             
             setTimeout(() => {
-                if (!this.gameActive && this.notificationsEnabled) {
+                if (!this.gameActive && this.notificationsEnabled && this.registered) {
                     this.startFactNotifications();
                 }
             }, 1000);
@@ -375,7 +500,7 @@ new Vue({
             this.showAccountModal = false;
             
             setTimeout(() => {
-                if (this.notificationsEnabled) {
+                if (this.notificationsEnabled && this.registered) {
                     this.startFactNotifications();
                 }
             }, 500);
@@ -389,7 +514,7 @@ new Vue({
             this.gameStatus = '';
             
             setTimeout(() => {
-                if (this.notificationsEnabled) {
+                if (this.notificationsEnabled && this.registered) {
                     this.startFactNotifications();
                 }
             }, 500);
@@ -421,19 +546,16 @@ new Vue({
         },
         
         showBigPhoto() {
-            // Проверка: если пользователь не зарегистрирован - НИКАКИХ уведомлений
             if (!this.registered) {
                 console.log('Пользователь не зарегистрирован, уведомления скрыты');
                 return;
             }
             
-            // Проверка: если уведомления отключены - НЕ показываем
             if (!this.notificationsEnabled) {
                 console.log('Уведомления отключены, показ фото пропущен');
                 return;
             }
             
-            // Проверка: если игра активна - НЕ показываем
             if (this.gameActive || this.gameEnded) {
                 console.log('Игра активна, уведомления скрыты');
                 return;
@@ -442,7 +564,6 @@ new Vue({
             const photoSlide = document.getElementById('bigPhotoSlide');
             if (!photoSlide) return;
             
-            // Очищаем предыдущие таймауты
             if (this.factTimeout) {
                 clearTimeout(this.factTimeout);
                 this.factTimeout = null;
@@ -459,10 +580,7 @@ new Vue({
             
             const isLeft = Math.random() > 0.5;
             
-            // Сначала скрываем, потом показываем
             photoSlide.classList.remove('right-side', 'left-side', 'show');
-            
-            // Форсируем скрытие перед показом
             photoSlide.style.display = 'block';
             
             if (isLeft) {
@@ -471,12 +589,10 @@ new Vue({
                 photoSlide.classList.add('right-side');
             }
             
-            // Небольшая задержка для плавного появления
             setTimeout(() => {
                 photoSlide.classList.add('show');
             }, 50);
             
-            // Авто-закрытие через 7 секунд
             this.factTimeout = setTimeout(() => {
                 this.closeBigPhoto();
             }, 7000);
@@ -486,7 +602,6 @@ new Vue({
             const photoSlide = document.getElementById('bigPhotoSlide');
             if (photoSlide) {
                 photoSlide.classList.remove('show');
-                // Скрываем после анимации
                 setTimeout(() => {
                     if (photoSlide && !photoSlide.classList.contains('show')) {
                         photoSlide.style.display = 'none';
@@ -510,7 +625,6 @@ new Vue({
         startFactNotifications() {
             console.log('startFactNotifications вызван');
             
-            // ВАЖНО: проверяем, зарегистрирован ли пользователь
             if (!this.registered) {
                 console.log('Пользователь не зарегистрирован, уведомления не запускаются');
                 return;
@@ -526,7 +640,6 @@ new Vue({
                 return;
             }
             
-            // Очищаем существующие интервалы
             if (this.factInterval) {
                 clearInterval(this.factInterval);
                 this.factInterval = null;
@@ -537,14 +650,12 @@ new Vue({
                 this.factTimeout = null;
             }
             
-            // Запускаем первое уведомление через 5 секунд
             this.factTimeout = setTimeout(() => {
                 if (this.registered && this.notificationsEnabled && !this.gameActive && !this.gameEnded) {
                     this.showBigPhoto();
                 }
             }, 5000);
             
-            // Запускаем интервал каждые 15 секунд
             this.factInterval = setInterval(() => {
                 if (this.registered && this.notificationsEnabled && !this.gameActive && !this.gameEnded) {
                     this.showBigPhoto();
@@ -574,7 +685,8 @@ new Vue({
         const savedUser = localStorage.getItem('ddosUser');
         if (savedUser) {
             try {
-                this.user = JSON.parse(savedUser);
+                const userData = JSON.parse(savedUser);
+                this.user = userData;
                 this.registered = true;
                 this.loadStats();
             } catch(e) {
@@ -585,7 +697,6 @@ new Vue({
         
         this.loadTournament();
         
-        // Загружаем состояние уведомлений
         const savedNotifications = localStorage.getItem('ddosNotificationsEnabled');
         if (savedNotifications !== null) {
             this.notificationsEnabled = savedNotifications === 'true';
