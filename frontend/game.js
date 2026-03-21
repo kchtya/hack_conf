@@ -1,6 +1,6 @@
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+let gameCanvas = null;
+let ctx = null;
 
 // Загружаем ваш SVG файл
 const robotImg = new Image();
@@ -19,7 +19,7 @@ robotImg.onerror = () => {
 let width, height;
 let gameActive = false;
 let score = 0;
-let misses = 0;
+let lives = 15;  // Жизни увеличены до 15
 let timeLeft = 90;
 let spawnInterval = null;
 let currentTimer = null;
@@ -31,38 +31,13 @@ let robots = [];
 let particles = [];
 let trailPoints = [];
 
-// DOM элементы
-const scoreElement = document.getElementById('scoreValue');
-const timeElement = document.getElementById('timeValue');
-const registrationScreen = document.getElementById('registrationScreen');
-const resultScreen = document.getElementById('resultScreen');
-const registrationForm = document.getElementById('registrationForm');
-const restartBtn = document.getElementById('restartBtn');
-
-// Добавляем счетчик промахов и рекорд
-const missesElement = document.createElement('div');
-missesElement.className = 'misses-box';
-missesElement.innerHTML = 'ПРОМАХИ: <span id="missesValue">0</span>/15';
-document.querySelector('.stats').appendChild(missesElement);
-const missesValueElement = document.getElementById('missesValue');
-
-const highScoreElement = document.createElement('div');
-highScoreElement.className = 'highscore-box';
-highScoreElement.innerHTML = '🏆 РЕКОРД: <span id="highScoreValue">' + highScore + '</span>';
-document.querySelector('.stats').appendChild(highScoreElement);
-
-function updateMissesDisplay() {
-    if (missesValueElement) missesValueElement.textContent = misses;
-}
-
-function updateHighScore() {
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('ddosHighScore', highScore);
-        const highScoreSpan = document.getElementById('highScoreValue');
-        if (highScoreSpan) highScoreSpan.textContent = highScore;
-    }
-}
+// Глобальные переменные для Vue
+window.gameState = {
+    score: 0,
+    lives: 15,
+    timeLeft: 90,
+    isActive: false
+};
 
 // ==================== РОБОТ С ПРАВИЛЬНОЙ ФИЗИКОЙ ====================
 class Robot {
@@ -120,13 +95,11 @@ class Robot {
     update() {
         switch(this.state) {
             case 'rising':
-                // Подъем вверх
                 this.velocityY += this.gravity * 0.3;
                 this.y += this.velocityY;
                 this.x += this.velocityX;
                 this.rotation += 0.02;
                 
-                // Проверка: достигли ли верхней точки (скорость стала положительной)
                 if (this.velocityY >= 0) {
                     this.state = 'hanging';
                     this.hangFrames = 0;
@@ -135,12 +108,10 @@ class Robot {
                 break;
                 
             case 'hanging':
-                // Зависаем в верхней точке
                 this.hangFrames++;
                 this.x += this.velocityX * 0.1;
                 this.rotation = Math.sin(this.hangFrames * 0.15) * 0.05;
                 
-                // После зависания начинаем падать
                 if (this.hangFrames >= this.maxHangFrames) {
                     this.state = 'falling';
                     this.velocityY = 1.5;
@@ -148,7 +119,6 @@ class Robot {
                 break;
                 
             case 'falling':
-                // Падение вниз с ускорением
                 this.velocityY += this.gravity;
                 this.y += this.velocityY;
                 this.x += this.velocityX;
@@ -305,9 +275,9 @@ function addTrailPoint(x, y) {
 function checkHit(clientX, clientY) {
     if (!gameActive) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const rect = gameCanvas.getBoundingClientRect();
+    const scaleX = gameCanvas.width / rect.width;
+    const scaleY = gameCanvas.height / rect.height;
     const mouseX = (clientX - rect.left) * scaleX;
     const mouseY = (clientY - rect.top) * scaleY;
     
@@ -331,8 +301,9 @@ function checkHit(clientX, clientY) {
     if (hitIndex !== -1) {
         const hit = robots[hitIndex];
         score += hit.points;
-        scoreElement.textContent = score;
-        updateHighScore();
+        
+        // Обновляем глобальное состояние
+        window.gameState.score = score;
         
         createSliceEffect(hit.x, hit.y);
         
@@ -353,7 +324,7 @@ function spawnRobot() {
     robots.push(robot);
 }
 
-// ==================== ФИЗИКА ====================
+// ==================== ФИЗИКА С ЖИЗНЯМИ ====================
 function updatePhysics() {
     if (!gameActive) return;
     
@@ -364,12 +335,16 @@ function updatePhysics() {
         if (robot.shouldRemove()) {
             if (!robot.wasHit) {
                 robot.wasHit = true;
-                misses++;
-                updateMissesDisplay();
+                
+                // Отнимаем жизнь за улетевшего робота
+                lives--;
+                window.gameState.lives = lives;
+                
                 createMissEffect(robot.x, robot.y);
                 
-                if (misses >= 15) {
-                    endGame('misses');
+                // Проверка на поражение (жизни закончились)
+                if (lives <= 0) {
+                    endGame();
                     return;
                 }
             }
@@ -427,7 +402,7 @@ function drawTrail() {
 }
 
 function draw() {
-    if (!width || !height) return;
+    if (!width || !height || !ctx) return;
     
     drawBackground();
     
@@ -456,13 +431,7 @@ function draw() {
 }
 
 // ==================== УПРАВЛЕНИЕ ИГРОЙ ====================
-function updateTimeDisplay() {
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = Math.floor(timeLeft % 60);
-    timeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function startGame() {
+function startGameInternal() {
     if (spawnInterval) {
         clearInterval(spawnInterval);
         spawnInterval = null;
@@ -474,30 +443,33 @@ function startGame() {
     
     gameActive = true;
     score = 0;
-    misses = 0;
+    lives = 15;  // 15 жизней
     timeLeft = 90;
     robots = [];
     particles = [];
     trailPoints = [];
-    scoreElement.textContent = score;
-    updateTimeDisplay();
-    updateMissesDisplay();
+    
+    window.gameState.score = 0;
+    window.gameState.lives = 15;
+    window.gameState.timeLeft = 90;
+    window.gameState.isActive = true;
     
     spawnInterval = setInterval(spawnRobot, 750);
     
     currentTimer = setInterval(() => {
         if (gameActive && timeLeft > 0) {
             timeLeft--;
-            updateTimeDisplay();
+            window.gameState.timeLeft = timeLeft;
             if (timeLeft <= 0) {
-                endGame('time');
+                endGame();
             }
         }
     }, 1000);
 }
 
-function endGame(reason) {
+function endGame() {
     gameActive = false;
+    window.gameState.isActive = false;
     
     if (spawnInterval) {
         clearInterval(spawnInterval);
@@ -508,105 +480,202 @@ function endGame(reason) {
         currentTimer = null;
     }
     
-    updateHighScore();
-    
-    const resultTitle = document.getElementById('resultTitle');
-    const finalScoreSpan = document.getElementById('finalScore');
-    finalScoreSpan.textContent = score;
-    
-    if (reason === 'misses') {
-        resultTitle.textContent = 'ПОРАЖЕНИЕ!';
-        resultTitle.className = 'result-title lose';
-    } else if (score >= 250) {
-        resultTitle.textContent = 'ПОБЕДА!';
-        resultTitle.className = 'result-title win';
-    } else {
-        resultTitle.textContent = 'ПОРАЖЕНИЕ';
-        resultTitle.className = 'result-title lose';
+    // Сохраняем рекорд
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('ddosHighScore', highScore);
     }
     
-    resultScreen.classList.remove('hidden');
-}
-
-function resetAndStart() {
-    resultScreen.classList.add('hidden');
-    startGame();
+    // Вызываем колбэк если есть
+    if (window.onGameEnd) {
+        window.onGameEnd(score, Math.floor(score / 10));
+    }
 }
 
 // ==================== ОБРАБОТЧИКИ СОБЫТИЙ ====================
-function resizeCanvas() {
-    const container = canvas.parentElement;
-    width = container.clientWidth;
-    height = container.clientHeight;
-    canvas.width = width;
-    canvas.height = height;
+function setupEventListeners() {
+    if (!gameCanvas) return;
+    
+    gameCanvas.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        checkHit(e.clientX, e.clientY);
+    });
+    
+    gameCanvas.addEventListener('mousemove', (e) => {
+        if (!gameActive) return;
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        addTrailPoint(mouseX, mouseY);
+    });
+    
+    gameCanvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        checkHit(touch.clientX, touch.clientY);
+    }, { passive: false });
+    
+    gameCanvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        const touch = e.touches[0];
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const touchX = (touch.clientX - rect.left) * scaleX;
+        const touchY = (touch.clientY - rect.top) * scaleY;
+        addTrailPoint(touchX, touchY);
+    }, { passive: false });
 }
 
-canvas.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    checkHit(e.clientX, e.clientY);
-});
-
-canvas.addEventListener('mousemove', (e) => {
-    if (!gameActive) return;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
-    addTrailPoint(mouseX, mouseY);
-});
-
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    checkHit(touch.clientX, touch.clientY);
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (!gameActive) return;
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const touchX = (touch.clientX - rect.left) * scaleX;
-    const touchY = (touch.clientY - rect.top) * scaleY;
-    addTrailPoint(touchX, touchY);
-}, { passive: false });
+function resizeCanvasInternal() {
+    if (!gameCanvas) return;
+    const container = gameCanvas.parentElement;
+    if (container) {
+        width = container.clientWidth;
+        height = container.clientHeight - 80; // вычитаем высоту game-info
+        gameCanvas.width = width;
+        gameCanvas.height = height;
+        console.log('Canvas resized:', width, height);
+    }
+}
 
 // ==================== АНИМАЦИЯ ====================
-function animate() {
+function animateGame() {
     if (gameActive) {
         updatePhysics();
     }
     draw();
-    animationId = requestAnimationFrame(animate);
+    animationId = requestAnimationFrame(animateGame);
 }
 
-// ==================== РЕГИСТРАЦИЯ ====================
-registrationForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const firstName = document.getElementById('firstName').value;
-    const lastName = document.getElementById('lastName').value;
-    const phone = document.getElementById('phone').value;
-    
-    if (firstName && lastName && phone) {
-        localStorage.setItem('ddosUser', JSON.stringify({ firstName, lastName, phone, score: 0, date: new Date().toISOString() }));
-        registrationScreen.classList.add('hidden');
-        startGame();
-    } else {
-        alert('Пожалуйста, заполните все поля');
+// ==================== ЭКСПОРТ ДЛЯ ИНТЕГРАЦИИ ====================
+window.startDDoSGame = function(canvas, onEnd) {
+    // Останавливаем предыдущую игру
+    if (animationId) {
+        cancelAnimationFrame(animationId);
     }
+    
+    // Устанавливаем новый canvas
+    gameCanvas = canvas;
+    ctx = gameCanvas.getContext('2d');
+    
+    // Настраиваем колбэк
+    window.onGameEnd = onEnd;
+    
+    // Инициализируем
+    resizeCanvasInternal();
+    setupEventListeners(
+        // В функции setupEventListeners или в начале файла
+function setupTouchEvents() {
+    if (!gameCanvas) return;
+    
+    // Отключаем прокрутку страницы при касании canvas
+    gameCanvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        checkHit(touch.clientX, touch.clientY);
+    }, { passive: false });
+    
+    gameCanvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        const touch = e.touches[0];
+        const rect = gameCanvas.getBoundingClientRect();
+        const scaleX = gameCanvas.width / rect.width;
+        const scaleY = gameCanvas.height / rect.height;
+        const touchX = (touch.clientX - rect.left) * scaleX;
+        const touchY = (touch.clientY - rect.top) * scaleY;
+        addTrailPoint(touchX, touchY);
+    }, { passive: false });
+    
+    gameCanvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+    });
+}
+    );
+    
+    // Запускаем игру
+    startGameInternal();
+    
+    // Запускаем анимацию
+    animateGame();
+    
+    // Возвращаем объект управления
+    return {
+        isActive: true,
+        score: score,
+        lives: lives,
+        timeLeft: timeLeft,
+        destroy: function() {
+            gameActive = false;
+            window.gameState.isActive = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            if (spawnInterval) clearInterval(spawnInterval);
+            if (currentTimer) clearInterval(currentTimer);
+            robots = [];
+        }
+    };
+    // Принудительное обновление размеров canvas при загрузке
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        if (typeof resizeCanvas === 'function') {
+            resizeCanvas();
+        }
+        console.log('Canvas размеры обновлены');
+    }, 100);
 });
 
-restartBtn.addEventListener('click', resetAndStart);
+// Экспортируем функцию для ручного обновления
+window.updateCanvasSize = function() {
+    if (typeof resizeCanvas === 'function') {
+        resizeCanvas();
+    }
+};
+};
 
 window.addEventListener('resize', () => {
-    resizeCanvas();
+    resizeCanvasInternal();
 });
 
-// ==================== ЗАПУСК ====================
-resizeCanvas();
-animate();
-console.log('DDoS Ниндзя запущена!');
+// Принудительное обновление размеров canvas при загрузке
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        if (typeof resizeCanvasInternal === 'function') {
+            resizeCanvasInternal();
+        }
+        console.log('Canvas размеры обновлены');
+    }, 100);
+});
+
+// Экспортируем функцию для ручного обновления
+window.updateCanvasSize = function() {
+    if (typeof resizeCanvasInternal === 'function') {
+        resizeCanvasInternal();
+    }
+};
+
+// Функция для обновления размеров canvas
+function resizeCanvasInternal() {
+    if (!gameCanvas) return;
+    const container = gameCanvas.parentElement;
+    if (container) {
+        const rect = container.getBoundingClientRect();
+        width = rect.width - 40;
+        height = rect.height - 100;
+        gameCanvas.width = width;
+        gameCanvas.height = height;
+        console.log('Canvas resized:', width, height);
+    }
+}
+
+// Добавляем слушатель изменения размера окна
+window.addEventListener('resize', () => {
+    resizeCanvasInternal();
+});
+
+console.log('DDoS Ниндзя готова к интеграции! Жизней: 15');
