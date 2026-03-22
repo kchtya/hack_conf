@@ -34,7 +34,7 @@
                 <div class="avatar">{{ user.firstName ? user.firstName.charAt(0) : '?' }}{{ user.lastName ? user.lastName.charAt(0) : '?' }}</div>
                 <div class="account-details">
                     <span class="account-name">{{ user.firstName }} {{ user.lastName }}</span>
-                    <span class="account-status">Активен</span>
+                    <span class="account-status">{{ isAdmin ? 'Администратор' : 'Активен' }}</span>
                 </div>
                 <div class="account-arrow">▼</div>
             </div>
@@ -52,6 +52,7 @@
                     <p><strong>Имя:</strong> {{ user.firstName }}</p>
                     <p><strong>Фамилия:</strong> {{ user.lastName }}</p>
                     <p><strong>Телефон:</strong> {{ user.phone }}</p>
+                    <p><strong>Роль:</strong> {{ isAdmin ? 'Администратор' : 'Игрок' }}</p>
                     <p><strong>Рекорд:</strong> {{ highScore }} очков</p>
                     <p><strong>Уничтожено:</strong> {{ totalKills }} роботов</p>
                     <button class="btn-logout" @click="logout">Выйти из аккаунта</button>
@@ -59,15 +60,21 @@
             </div>
         </div>
         
-        <!-- Регистрация -->
+        <!-- Страница авторизации (регистрация и вход) -->
         <div v-if="!registered" class="registration-container">
             <div class="logo">
                 <h1>DDoS-Ниндзя</h1>
                 <p>Уничтожай роботов-злоумышленников</p>
             </div>
             
-            <div class="registration-form">
-                <h2>Регистрация</h2>
+            <!-- Вкладки -->
+            <div class="auth-tabs">
+                <button :class="['tab-btn', { active: authMode === 'register' }]" @click="authMode = 'register'">Регистрация</button>
+                <button :class="['tab-btn', { active: authMode === 'login' }]" @click="authMode = 'login'">Вход</button>
+            </div>
+            
+            <!-- Форма регистрации -->
+            <div v-if="authMode === 'register'" class="registration-form">
                 <form @submit.prevent="register">
                     <div class="form-group">
                         <label>Имя *</label>
@@ -81,7 +88,12 @@
                     
                     <div class="form-group">
                         <label>Телефон *</label>
-                        <input type="tel" v-model="user.phone" placeholder="+7 (___)-___-__-__" required>
+                        <input type="tel" v-model="user.phone" placeholder="+7 (___)-___-__-__" inputmode="tel" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Пароль *</label>
+                        <input type="password" v-model="user.password" placeholder="Минимум 6 символов" required>
                     </div>
                     
                     <div class="form-group">
@@ -91,7 +103,31 @@
                         </label>
                     </div>
                     
-                    <button type="submit" class="btn-primary">Начать охоту</button>
+                    <button type="submit" class="btn-primary">Зарегистрироваться</button>
+                </form>
+                
+                <div class="telegram-option">
+                    <p>или</p>
+                    <button class="btn-telegram" @click="telegramAuth">
+                        Войти через Telegram
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Форма входа -->
+            <div v-if="authMode === 'login'" class="registration-form">
+                <form @submit.prevent="login">
+                    <div class="form-group">
+                        <label>Телефон *</label>
+                        <input type="tel" v-model="loginData.phone" placeholder="+7 (___)-___-__-__" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Пароль *</label>
+                        <input type="password" v-model="loginData.password" placeholder="Введите пароль" required>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Войти</button>
                 </form>
                 
                 <div class="telegram-option">
@@ -132,22 +168,19 @@
                     Турнирная таблица
                 </button>
                 
-                <button class="btn-admin" @click="openAdminPanel">
+                <!-- Кнопка админ-панели (появляется только если isAdmin = true) -->
+                <button v-if="isAdmin" class="btn-admin" @click="openAdminPanel">
                     Админ-панель
-                </button>
-                
-                <button class="btn-notifications" :class="notificationsButtonClass" @click="toggleNotifications">
-                    {{ notificationsButtonText }}
                 </button>
                 
                 <div v-if="showRules" class="rules">
                     <h3>Правила игры</h3>
-                    <p>Водите мышкой/пальцем по экрану — разрезайте роботов</p>
-                    <p>За каждого уничтоженного робота +10 очков</p>
-                    <p>Пропущенный робот = -1 жизнь</p>
-                    <p>У вас 15 жизней</p>
-                    <p>Время игры: 90 секунд</p>
-                    <p>Победа: 250+ очков</p>
+                    <p>⚔️ Водите мышкой/пальцем по экрану — разрезайте роботов</p>
+                    <p>🤖 За каждого уничтоженного робота +10 очков</p>
+                    <p>💔 Пропущенный робот = -1 жизнь</p>
+                    <p>❤️ У вас 15 жизней</p>
+                    <p>⏱️ Время игры: 90 секунд</p>
+                    <p>🏆 Победа: 250+ очков</p>
                 </div>
             </div>
         </div>
@@ -212,31 +245,31 @@
             </div>
             
             <div class="tournament-table">
-                <table>
+                 <table>
                     <thead>
-                        <tr>
+                         <tr>
                             <th>№</th>
                             <th>Имя</th>
                             <th>Фамилия</th>
                             <th>Очки</th>
                             <th>Уничтожено</th>
                             <th>Дата</th>
-                        </tr>
+                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(player, index) in topTen" :key="index" :class="{ 'highlight-row': isCurrentPlayer(player) }">
-                            <td>{{ index + 1 }}</td>
-                            <td>{{ player.firstName }}</td>
-                            <td>{{ player.lastName }}</td>
+                             <td>{{ index + 1 }}</td>
+                             <td>{{ player.firstName }}</td>
+                             <td>{{ player.lastName }}</td>
                             <td class="score-cell">{{ player.score }}</td>
-                            <td>{{ player.kills }}</td>
-                            <td>{{ player.date }}</td>
-                        </tr>
+                             <td>{{ player.kills }}</td>
+                             <td>{{ player.date }}</td>
+                         </tr>
                         <tr v-if="topTen.length === 0">
                             <td colspan="6" class="empty-table">Нет данных. Сыграйте в игру</td>
-                        </tr>
+                         </tr>
                     </tbody>
-                </table>
+                 </table>
             </div>
             
             <div class="tournament-actions">
@@ -245,15 +278,13 @@
             </div>
         </div>
         
-        <!-- Админ-панель -->
-        <div v-else-if="showAdminPanel" class="tournament-container">
+        <!-- Админ-панель (доступна только администратору) -->
+        <div v-else-if="showAdminPanel && isAdmin" class="tournament-container">
             <div class="admin-header">
                 <h2>Админ-панель</h2>
-                <button class="btn-close-admin" @click="showAdminPanel = false">Закрыть</button>
+                <button class="btn-close-admin" @click="closeAdminPanel">Закрыть</button>
             </div>
-            <button class="btn-notifications" :class="notificationsButtonClass" @click="toggleNotifications">
-            {{ notificationsButtonText }}
-            </button>
+            
             <div class="tournament-stats">
                 <div class="stat-card">
                     <h3>Всего игроков</h3>
@@ -266,9 +297,9 @@
             </div>
             
             <div class="tournament-table">
-                <table>
+                 <table>
                     <thead>
-                        <tr>
+                         <tr>
                             <th>№</th>
                             <th>Имя</th>
                             <th>Фамилия</th>
@@ -277,31 +308,32 @@
                             <th>Уничтожено</th>
                             <th>Дата</th>
                             <th>Действия</th>
-                        </tr>
+                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(player, index) in sortedTournament" :key="index">
-                            <td>{{ index + 1 }}</td>
-                            <td>{{ player.firstName }}</td>
-                            <td>{{ player.lastName }}</td>
-                            <td>{{ player.phone }}</td>
+                             <td>{{ index + 1 }}</td>
+                             <td>{{ player.firstName }}</td>
+                             <td>{{ player.lastName }}</td>
+                             <td>{{ player.phone }}</td>
                             <td class="score-cell">{{ player.score }}</td>
-                            <td>{{ player.kills }}</td>
-                            <td>{{ player.date }}</td>
-                            <td>
+                             <td>{{ player.kills }}</td>
+                             <td>{{ player.date }}</td>
+                             <td>
                                 <button class="btn-delete" @click="deletePlayer(index)">Удалить</button>
-                            </td>
-                        </tr>
+                             </td>
+                         </tr>
                         <tr v-if="tournamentData.length === 0">
                             <td colspan="8" class="empty-table">Нет данных. Сыграйте в игру</td>
-                        </tr>
+                         </tr>
                     </tbody>
-                </table>
+                 </table>
             </div>
             
             <div class="admin-actions">
                 <button class="btn-export" @click="exportData">Экспорт CSV</button>
                 <button class="btn-clear" @click="clearAllData">Очистить все</button>
+                <button class="btn-logout-admin" @click="logoutAdmin">Выйти из админ-панели</button>
             </div>
         </div>
         
