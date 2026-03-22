@@ -295,7 +295,133 @@ new Vue({
         },
         
         telegramAuth() {
-            alert('Telegram авторизация скоро появится');
+            const self = this;
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.85);
+                backdrop-filter: blur(8px);
+                z-index: 10000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+            
+            const container = document.createElement('div');
+            container.style.cssText = `
+                background: linear-gradient(135deg, #1a1a2e, #0f0f1a);
+                border-radius: 25px;
+                padding: 35px;
+                border: 1px solid #6b4eff;
+                text-align: center;
+                min-width: 320px;
+                max-width: 400px;
+            `;
+            
+            container.innerHTML = `
+                <h3 style="color: #ffaa66; margin-bottom: 20px;">Вход через Telegram</h3>
+                <p style="color: #b89aff; margin-bottom: 20px; font-size: 14px;">
+                    Нажмите кнопку ниже для авторизации
+                </p>
+                <div id="telegram-login-widget" style="display: flex; justify-content: center; margin: 20px 0;"></div>
+                <p style="color: #888; font-size: 11px; margin-top: 15px;">
+                    Бот: @ddsgrd_bot
+                </p>
+                <button id="close-telegram-modal" style="
+                    margin-top: 15px;
+                    padding: 8px 25px;
+                    background: transparent;
+                    border: 1px solid #ff6b4e;
+                    color: #ff6b4e;
+                    border-radius: 25px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">Отмена</button>
+            `;
+            
+            modal.appendChild(container);
+            document.body.appendChild(modal);
+            
+            window.onTelegramAuth = function(telegramUser) {
+                console.log('Telegram user:', telegramUser);
+                
+                fetch('backend/api.php?action=telegram_auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(telegramUser)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Server response:', data);
+                    
+                    if (data.success) {
+                        self.userId = data.user.id;
+                        self.user.firstName = data.user.firstName;
+                        self.user.lastName = data.user.lastName;
+                        self.user.phone = data.user.phone || '';
+                        self.user.consent = true;
+                        self.registered = true;
+                        
+                        localStorage.setItem('ddosUserId', self.userId);
+                        localStorage.setItem('ddosUser', JSON.stringify({
+                            id: self.userId,
+                            firstName: self.user.firstName,
+                            lastName: self.user.lastName,
+                            phone: self.user.phone
+                        }));
+                        
+                        self.loadUserStats();
+                        self.loadTournament();
+                        
+                        modal.remove();
+                        alert('Добро пожаловать, ' + self.user.firstName + '!');
+                    } else {
+                        alert('Ошибка авторизации: ' + (data.error || 'Неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ошибка подключения к серверу');
+                });
+                
+                delete window.onTelegramAuth;
+            };
+            
+            const script = document.createElement('script');
+            script.src = 'https://telegram.org/js/telegram-widget.js?23';
+            script.setAttribute('data-telegram-login', 'ddsgrd_bot');
+            script.setAttribute('data-size', 'large');
+            script.setAttribute('data-radius', '10');
+            script.setAttribute('data-request-access', 'write');
+            script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+            script.async = true;
+            
+            const widgetContainer = document.getElementById('telegram-login-widget');
+            if (widgetContainer) {
+                widgetContainer.appendChild(script);
+            }
+            
+            const closeBtn = document.getElementById('close-telegram-modal');
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    modal.remove();
+                    delete window.onTelegramAuth;
+                };
+            }
+            
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                    delete window.onTelegramAuth;
+                }
+            };
         },
         
         toggleNotifications() {
@@ -744,6 +870,7 @@ new Vue({
     
     mounted() {
         console.log('Vue mounted');
+        
         const savedUserId = localStorage.getItem('ddosUserId');
         const savedUser = localStorage.getItem('ddosUser');
         

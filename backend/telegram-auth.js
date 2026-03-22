@@ -2,6 +2,16 @@ const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
 const app = express();
+const cors = require('cors');
+
+app.use(express.json());
+
+// настройка cors
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
+}));
 
 app.use(express.json());
 
@@ -76,6 +86,8 @@ app.post('/api/telegram-auth', (req, res) => {
     });
 });
 
-app.listen(3000, () => {
-    console.log('Telegram auth server running on port 3000');
-});  //ЕЩЕ ЕСТЬ ИЗМЕНЕНИЯ ВО ФРОНТЕНДЕ - app.js - telegramAuth()
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`Telegram auth server running on http://localhost:${PORT}`);
+    console.log('BOT_TOKEN используется:', BOT_TOKEN.substring(0, 10) + '...');
+});

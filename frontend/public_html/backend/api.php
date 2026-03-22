@@ -26,6 +26,9 @@ try {
         case 'clear_all':
             clearAllResults($pdo);
             break;
+        case 'telegram_auth':
+            telegramAuth($pdo);
+            break;
         default:
             echo json_encode(['success' => false, 'error' => 'Неизвестное действие']);
     }
@@ -225,5 +228,98 @@ function clearAllResults($pdo) {
     }
     
     echo json_encode(['success' => $result]);
+}
+
+function telegramAuth($pdo) {
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    $botToken = '8670201639:AAF-rL6tld6mK2VCfbSAsGHFeUGHWVwM0bA';
+    
+    // Проверка наличия всех необходимых полей
+    if (!isset($data['id']) || !isset($data['first_name']) || !isset($data['auth_date']) || !isset($data['hash'])) {
+        echo json_encode(['success' => false, 'error' => 'Недостаточно данных от Telegram']);
+        return;
+    }
+    
+    // Формируем строку для проверки подписи
+    $checkString = [];
+    foreach ($data as $key => $value) {
+        if ($key !== 'hash') {
+            $checkString[] = "$key=$value";
+        }
+    }
+    sort($checkString);
+    $checkString = implode("\n", $checkString);
+    
+    // Вычисляем хеш для проверки
+    $secretKey = hash_hmac('sha256', $botToken, 'WebAppData', true);
+    $computedHash = bin2hex(hash_hmac('sha256', $checkString, $secretKey, true));
+    
+    // Сравниваем хеши
+    if ($computedHash !== $data['hash']) {
+        echo json_encode(['success' => false, 'error' => 'Неверная подпись Telegram']);
+        return;
+    }
+    
+    // Проверяем срок авторизации (не более 24 часов)
+    $authDate = (int)$data['auth_date'];
+    if (time() - $authDate > 86400) {
+        echo json_encode(['success' => false, 'error' => 'Срок авторизации истек. Повторите вход']);
+        return;
+    }
+    
+    $telegramId = $data['id'];
+    $firstName = trim($data['first_name']);
+    $lastName = trim($data['last_name'] ?? '');
+    $username = $data['username'] ?? '';
+    $photoUrl = $data['photo_url'] ?? '';
+    
+    if (!$telegramId || empty($firstName)) {
+        echo json_encode(['success' => false, 'error' => 'Недостаточно данных пользователя']);
+        return;
+    }
+    
+    // Проверяем, есть ли пользователь с таким telegram_id
+    $stmt = $pdo->prepare("SELECT id, first_name, last_name, phone FROM users WHERE telegram_id = ?");
+    $stmt->execute([$telegramId]);
+    $existingUser = $stmt->fetch();
+    
+    if ($existingUser) {
+        // Пользователь уже существует - выполняем вход
+        echo json_encode([
+            'success' => true,
+            'user' => [
+                'id' => $existingUser['id'],
+                'firstName' => $existingUser['first_name'],
+                'lastName' => $existingUser['last_name'],
+                'phone' => $existingUser['phone'] ?? ''
+            ]
+        ]);
+    } else {
+        // Создаем нового пользователя
+        $hashedPassword = password_hash($telegramId . '_telegram_auth', PASSWORD_DEFAULT);
+        
+        $stmt = $pdo->prepare("INSERT INTO users (first_name, last_name, phone, password, telegram_id, telegram_username) VALUES (?, ?, ?, ?, ?, ?)");
+        $result = $stmt->execute([$firstName, $lastName, '', $hashedPassword, $telegramId, $username]);
+        
+        if ($result) {
+            $userId = $pdo->lastInsertId();
+            
+            $stmt = $pdo->prepare("INSERT INTO user_stats (user_id, best_score, total_kills) VALUES (?, 0, 0)");
+            $stmt->execute([$userId]);
+            
+            echo json_encode([
+                'success' => true,
+                'user' => [
+                    'id' => $userId,
+                    'firstName' => $firstName,
+                    'lastName' => $lastName,
+                    'phone' => ''
+                ]
+            ]);
+        } else {
+            echo json_encode(['success' => false, 'error' => 'Ошибка регистрации через Telegram']);
+        }
+    }
 }
 ?>
